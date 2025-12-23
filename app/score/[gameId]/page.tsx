@@ -426,10 +426,10 @@ export default function ScorePage() {
 
         {/* Team Totals */}
         <div className="mt-8 bg-gradient-to-r from-cyan-800 to-cyan-700 rounded-lg shadow-lg p-3 md:p-6">
-          <h2 className="text-3xl font-bold text-center mb-6 text-white">Team Totals</h2>
+          <h2 className="text-3xl font-bold text-center mb-6 text-amber-500">Team Totals</h2>
           <div className="space-y-3">
             {calculateTeamTotals().map(([teamName, total]) => (
-              <div key={teamName} className="flex items-center justify-between py-3 px-6 bg-sky-600/30 rounded-lg">
+              <div key={teamName} className="flex items-center justify-between py-3 px-6 bg-sky-500/30 rounded-lg">
                 <span className="text-2xl font-light text-white">{teamName}</span>
                 <span className="text-3xl font-bold text-white">{total}</span>
               </div>

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Sometype_Mono, Mukta } from 'next/font/google';
+import { Sometype_Mono, Archivo } from 'next/font/google';
 import './globals.css';
 import ScrollToTop from '@/components/ScrollToTop';
 
@@ -8,7 +8,7 @@ const sometypeMono = Sometype_Mono({
   variable: '--font-sometype-mono',
 });
 
-const mukta = Mukta({
+const archivo = Archivo({
   subsets: ['latin'],
   weight: ['200', '300', '400', '500', '600', '700', '800'],
 });
@@ -26,7 +26,7 @@ export default function RootLayout({
   return (
     <html lang='en'>
       <body
-        className={`${mukta.className} ${sometypeMono.variable} bg-gradient-to-br from-indigo-900 to-indigo-950 min-h-screen`}
+        className={`${archivo.className} ${sometypeMono.variable} bg-gradient-to-br from-indigo-900 to-indigo-950 min-h-screen`}
       >
         <ScrollToTop />
         {children}
