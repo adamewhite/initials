@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import GameBoard from '@/components/GameBoard';
 
@@ -15,6 +16,7 @@ interface Game {
   initials_row1: string;
   initials_row2: string;
   initials_row3: string;
+  all_initials?: string[];
 }
 
 interface Player {
@@ -94,7 +96,7 @@ export default function PlayPage() {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center p-6">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-800 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading game...</p>
         </div>
       </main>
@@ -108,7 +110,7 @@ export default function PlayPage() {
           <p className="text-red-600">Game not found</p>
           <button
             onClick={() => router.push('/')}
-            className="mt-4 text-blue-600 hover:text-blue-700 font-medium"
+            className="mt-4 text-cyan-800 hover:text-cyan-900 font-medium text-xl"
           >
             Back to Home
           </button>
@@ -146,7 +148,14 @@ export default function PlayPage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-900">
+    <main className="flex min-h-screen flex-col p-6">
+      <div className="w-full max-w-4xl mx-auto mb-6">
+        <Link href="/" className="inline-block">
+          <h1 className="text-4xl font-light italic text-amber-500 tracking-wide font-[family-name:var(--font-sometype-mono)]">
+            INITIALS
+          </h1>
+        </Link>
+      </div>
       <GameBoard
         gameId={gameId}
         timerDuration={game.timer_duration}
@@ -157,6 +166,7 @@ export default function PlayPage() {
         initialsRow1={game.initials_row1}
         initialsRow2={game.initials_row2}
         initialsRow3={game.initials_row3}
+        allInitials={game.all_initials}
       />
     </main>
   );

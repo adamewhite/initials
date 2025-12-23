@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
 type InitialDirection = 'A_TO_Z' | 'Z_TO_A' | 'RANDOM' | 'RANDOM_FIRST_NAMES' | 'RANDOM_LAST_NAMES' | 'CUSTOM_TEXT';
@@ -66,9 +67,16 @@ const LAST_NAME_DISTRIBUTION: Record<string, number> = {
   "Z": 0.0129
 };
 
+// NATO phonetic alphabet for team names
+const NATO_ALPHABET = [
+  'Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel',
+  'India', 'Juliet', 'Kilo', 'Lima', 'Mike', 'November', 'Oscar', 'Papa',
+  'Quebec', 'Romeo', 'Sierra', 'Tango', 'Uniform', 'Victor', 'Whiskey',
+  'X-ray', 'Yankee', 'Zulu'
+];
+
 export default function InitiatePage() {
   const router = useRouter();
-  const [playerName, setPlayerName] = useState('');
   const [numTeams, setNumTeams] = useState(2);
   const [timerDuration, setTimerDuration] = useState(60);
   const [firstInitialDirection, setFirstInitialDirection] = useState<InitialDirection>('A_TO_Z');
@@ -82,6 +90,11 @@ export default function InitiatePage() {
   // Custom text inputs
   const [firstCustomText, setFirstCustomText] = useState('');
   const [secondCustomText, setSecondCustomText] = useState('');
+
+  // Scroll to top on mount
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   const generateGameCode = () => {
     const adjectives = [
@@ -187,6 +200,88 @@ export default function InitiatePage() {
     try {
       const gameCode = generateGameCode();
 
+      // Generate all 26 rows of initials, ensuring uniqueness
+      const allInitials: string[] = [];
+      const usedPairs = new Set<string>();
+
+      // For custom text, extract letters and track positions
+      const firstCustomLetters = firstInitialDirection === 'CUSTOM_TEXT'
+        ? extractAlphabeticCharacters(firstCustomText)
+        : [];
+      const secondCustomLetters = secondInitialDirection === 'CUSTOM_TEXT'
+        ? extractAlphabeticCharacters(secondCustomText)
+        : [];
+      let firstCustomIndex = 0;
+      let secondCustomIndex = 0;
+
+      const isWeightedRandom = firstInitialDirection === 'RANDOM_FIRST_NAMES' ||
+                               firstInitialDirection === 'RANDOM_LAST_NAMES' ||
+                               secondInitialDirection === 'RANDOM_FIRST_NAMES' ||
+                               secondInitialDirection === 'RANDOM_LAST_NAMES';
+
+      const hasCustomText = firstInitialDirection === 'CUSTOM_TEXT' ||
+                           secondInitialDirection === 'CUSTOM_TEXT';
+
+      for (let i = 0; i < 26; i++) {
+        let pair = '';
+        let attempts = 0;
+        const maxAttempts = 100;
+
+        do {
+          // Generate first initial
+          let first = '';
+          if (firstInitialDirection === 'CUSTOM_TEXT') {
+            if (firstCustomIndex < firstCustomLetters.length) {
+              first = firstCustomLetters[firstCustomIndex];
+            } else {
+              // Out of custom text, use random letter
+              first = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+            }
+          } else {
+            first = getInitialForRow(i, firstInitialDirection, randomFirstLetters, firstCustomText);
+          }
+
+          // Generate second initial
+          let second = '';
+          if (secondInitialDirection === 'CUSTOM_TEXT') {
+            if (secondCustomIndex < secondCustomLetters.length) {
+              second = secondCustomLetters[secondCustomIndex];
+            } else {
+              // Out of custom text, use random letter
+              second = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+            }
+          } else {
+            second = getInitialForRow(i, secondInitialDirection, randomSecondLetters, secondCustomText);
+          }
+
+          pair = first + second;
+
+          // If duplicate found and using custom text or weighted random, try next position
+          if (usedPairs.has(pair) && (hasCustomText || isWeightedRandom)) {
+            if (firstInitialDirection === 'CUSTOM_TEXT') {
+              firstCustomIndex++;
+            }
+            if (secondInitialDirection === 'CUSTOM_TEXT') {
+              secondCustomIndex++;
+            }
+          } else {
+            // No duplicate, advance to next position for next row
+            if (firstInitialDirection === 'CUSTOM_TEXT') {
+              firstCustomIndex++;
+            }
+            if (secondInitialDirection === 'CUSTOM_TEXT') {
+              secondCustomIndex++;
+            }
+            break;
+          }
+
+          attempts++;
+        } while (usedPairs.has(pair) && attempts < maxAttempts);
+
+        allInitials.push(pair);
+        usedPairs.add(pair);
+      }
+
       // Create the game with initials for each row
       const { data: game, error: gameError } = await supabase
         .from('games')
@@ -195,22 +290,24 @@ export default function InitiatePage() {
           num_teams: numTeams,
           timer_duration: timerDuration,
           status: 'waiting',
-          initials_row1: generateInitialsForRow(0),
-          initials_row2: generateInitialsForRow(1),
-          initials_row3: generateInitialsForRow(2)
+          initials_row1: allInitials[0],
+          initials_row2: allInitials[1],
+          initials_row3: allInitials[2],
+          all_initials: allInitials
         })
         .select()
         .single();
 
       if (gameError) throw gameError;
 
-      // Create the initiator player
+      // Create the initiator player (automatically assigned to Team Alpha - team_number 1)
       const { data: playerData, error: playerError } = await supabase
         .from('players')
         .insert({
           game_id: game.id,
-          name: playerName,
-          is_initiator: true
+          name: 'Alpha Player 1', // Temporary name for tracking
+          is_initiator: true,
+          team_number: 1 // Alpha team
         })
         .select()
         .single();
@@ -238,67 +335,63 @@ export default function InitiatePage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-900">
-      <div className="w-full max-w-md">
-        <h1 className="text-4xl font-bold text-center mb-2 text-white">
-          Initiate Game
+    <main className="flex min-h-screen flex-col p-6">
+      <div className="w-full max-w-md mx-auto mb-12">
+        <Link href="/" className="inline-block mb-8">
+          <h1 className="text-4xl font-light italic text-amber-500 tracking-wide font-[family-name:var(--font-sometype-mono)]">
+            INITIALS
+          </h1>
+        </Link>
+
+        <h1 className="text-4xl font-bold text-center mb-8 text-white">
+          Create Game
         </h1>
-        <p className="text-center text-gray-400 mb-8">
-          Set up your game parameters
-        </p>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-lg p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="bg-gradient-to-r from-cyan-700 to-cyan-600 rounded-lg shadow-lg p-6 space-y-6">
           <div>
-            <label htmlFor="playerName" className="block text-sm font-medium text-gray-700 mb-2">
-              Your Name
-            </label>
-            <input
-              type="text"
-              id="playerName"
-              value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
-              required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-              placeholder="Enter your name"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="numTeams" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="numTeams" className="block text-lg font-medium text-amber-500 mb-2">
               Number of Teams
             </label>
-            <input
-              type="number"
+            <select
               id="numTeams"
               value={numTeams}
               onChange={(e) => setNumTeams(parseInt(e.target.value))}
-              min="2"
-              max="10"
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-            />
+              className="w-full pl-4 pr-10 py-3 border border-sky-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-white text-gray-900 bg-blue-50 text-lg"
+            >
+              {[2, 3, 4, 5, 6, 7, 8].map(num => (
+                <option key={num} value={num}>{num}</option>
+              ))}
+            </select>
           </div>
 
           <div>
-            <label htmlFor="timerDuration" className="block text-sm font-medium text-gray-700 mb-2">
-              Timer Duration (seconds)
+            <label htmlFor="timerDuration" className="block text-lg font-medium text-amber-500 mb-2">
+              Game Length
             </label>
-            <input
-              type="number"
+            <select
               id="timerDuration"
               value={timerDuration}
               onChange={(e) => setTimerDuration(parseInt(e.target.value))}
-              min="30"
-              max="300"
-              step="15"
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-            />
+              className="w-full pl-4 pr-10 py-3 border border-sky-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-white text-gray-900 bg-blue-50 text-lg"
+            >
+              <option value={60}>1 minute</option>
+              <option value={120}>2 minutes</option>
+              <option value={180}>3 minutes</option>
+              <option value={240}>4 minutes</option>
+              <option value={300}>5 minutes</option>
+              <option value={360}>6 minutes</option>
+              <option value={420}>7 minutes</option>
+              <option value={480}>8 minutes</option>
+              <option value={540}>9 minutes</option>
+              <option value={600}>10 minutes</option>
+            </select>
           </div>
 
           <div>
-            <label htmlFor="firstInitial" className="block text-sm font-medium text-gray-700 mb-2">
-              First Initial Pattern
+            <label htmlFor="firstInitial" className="block text-lg font-medium text-amber-500 mb-2">
+              First Initial
             </label>
             <select
               id="firstInitial"
@@ -315,10 +408,10 @@ export default function InitiatePage() {
                   setFirstCustomText('');
                 }
               }}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+              className="w-full pl-4 pr-10 py-3 border border-sky-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-white text-gray-900 bg-blue-50 text-lg"
             >
-              <option value="A_TO_Z">A to Z (Row 1: A, Row 2: B, Row 3: C...)</option>
-              <option value="Z_TO_A">Z to A (Row 1: Z, Row 2: Y, Row 3: X...)</option>
+              <option value="A_TO_Z">A to Z</option>
+              <option value="Z_TO_A">Z to A</option>
               <option value="RANDOM">Random (Each Letter Once)</option>
               <option value="RANDOM_FIRST_NAMES">Random (Weighted by First Name Frequency)</option>
               <option value="CUSTOM_TEXT">Custom Text</option>
@@ -326,7 +419,7 @@ export default function InitiatePage() {
 
             {firstInitialDirection === 'CUSTOM_TEXT' && (
               <div className="mt-3">
-                <label htmlFor="firstCustomText" className="block text-xs font-medium text-gray-600 mb-1">
+                <label htmlFor="firstCustomText" className="block text-xs font-medium text-sky-200 mb-1">
                   Paste your text (first 26 letters will be used)
                 </label>
                 <textarea
@@ -334,10 +427,10 @@ export default function InitiatePage() {
                   value={firstCustomText}
                   onChange={(e) => setFirstCustomText(e.target.value)}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
+                  className="w-full px-3 py-2 border border-sky-300 rounded-md focus:outline-none focus:ring-2 focus:ring-white text-sm text-gray-900 bg-blue-50"
                   placeholder="Enter or paste text here..."
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-sky-200 mt-1">
                   {extractAlphabeticCharacters(firstCustomText).length} alphabetic characters found
                 </p>
               </div>
@@ -345,8 +438,8 @@ export default function InitiatePage() {
           </div>
 
           <div>
-            <label htmlFor="secondInitial" className="block text-sm font-medium text-gray-700 mb-2">
-              Second Initial Pattern
+            <label htmlFor="secondInitial" className="block text-lg font-medium text-amber-500 mb-2">
+              Second Initial
             </label>
             <select
               id="secondInitial"
@@ -363,10 +456,10 @@ export default function InitiatePage() {
                   setSecondCustomText('');
                 }
               }}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+              className="w-full pl-4 pr-10 py-3 border border-sky-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-white text-gray-900 bg-blue-50 text-lg"
             >
-              <option value="A_TO_Z">A to Z (Row 1: A, Row 2: B, Row 3: C...)</option>
-              <option value="Z_TO_A">Z to A (Row 1: Z, Row 2: Y, Row 3: X...)</option>
+              <option value="A_TO_Z">A to Z</option>
+              <option value="Z_TO_A">Z to A</option>
               <option value="RANDOM">Random (Each Letter Once)</option>
               <option value="RANDOM_LAST_NAMES">Random (Weighted by Last Name Frequency)</option>
               <option value="CUSTOM_TEXT">Custom Text</option>
@@ -374,7 +467,7 @@ export default function InitiatePage() {
 
             {secondInitialDirection === 'CUSTOM_TEXT' && (
               <div className="mt-3">
-                <label htmlFor="secondCustomText" className="block text-xs font-medium text-gray-600 mb-1">
+                <label htmlFor="secondCustomText" className="block text-xs font-medium text-sky-200 mb-1">
                   Paste your text (first 26 letters will be used)
                 </label>
                 <textarea
@@ -382,10 +475,10 @@ export default function InitiatePage() {
                   value={secondCustomText}
                   onChange={(e) => setSecondCustomText(e.target.value)}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-900"
+                  className="w-full px-3 py-2 border border-sky-300 rounded-md focus:outline-none focus:ring-2 focus:ring-white text-sm text-gray-900 bg-blue-50"
                   placeholder="Enter or paste text here..."
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-sky-200 mt-1">
                   {extractAlphabeticCharacters(secondCustomText).length} alphabetic characters found
                 </p>
               </div>
@@ -395,7 +488,7 @@ export default function InitiatePage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-4 px-6 rounded-lg text-lg transition-colors"
+            className="w-full bg-cyan-800 hover:bg-cyan-900 disabled:bg-cyan-950 text-white font-light py-4 px-6 rounded-lg text-2xl transition-colors"
           >
             {loading ? 'Creating Game...' : 'Create Game'}
           </button>
@@ -403,7 +496,7 @@ export default function InitiatePage() {
 
         <button
           onClick={() => router.push('/')}
-          className="w-full mt-4 text-gray-300 hover:text-white font-medium"
+          className="w-full mt-8 text-gray-300 hover:text-white font-medium text-xl"
         >
           Back to Home
         </button>

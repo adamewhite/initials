@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
 interface Player {
@@ -24,17 +25,32 @@ interface Game {
   initials_row1: string;
   initials_row2: string;
   initials_row3: string;
+  num_teams: number;
+  all_initials?: string[];
 }
+
+interface ValidationResult {
+  status: 'idle' | 'loading' | 'valid' | 'invalid';
+  url?: string;
+}
+
+// NATO phonetic alphabet for team names
+const NATO_ALPHABET = [
+  'Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel',
+  'India', 'Juliet', 'Kilo', 'Lima', 'Mike', 'November', 'Oscar', 'Papa',
+  'Quebec', 'Romeo', 'Sierra', 'Tango', 'Uniform', 'Victor', 'Whiskey',
+  'X-ray', 'Yankee', 'Zulu'
+];
 
 interface RowAnswers {
   rowNumber: number;
   initials: string;
-  playerAnswers: {
-    playerId: string;
-    playerName: string;
-    teamNumber: number | null;
+  teamAnswers: {
+    teamNumber: number;
+    teamName: string;
     answers: string[];
     score: number;
+    validation: ValidationResult;
   }[];
 }
 
@@ -46,23 +62,27 @@ export default function ScorePage() {
   const [rowAnswers, setRowAnswers] = useState<RowAnswers[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Scroll to top on mount
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   useEffect(() => {
     if (!gameId) return;
 
     const fetchAnswers = async () => {
-      // Get game to get initials
+      // Get game to get initials and number of teams
       const { data: game } = await supabase
         .from('games')
-        .select('initials_row1, initials_row2, initials_row3')
+        .select('initials_row1, initials_row2, initials_row3, num_teams, all_initials')
         .eq('id', gameId)
         .single();
 
       // Get all players
       const { data: players } = await supabase
         .from('players')
-        .select('id, name, is_initiator, team_number')
-        .eq('game_id', gameId)
-        .order('joined_at', { ascending: true });
+        .select('id, team_number')
+        .eq('game_id', gameId);
 
       // Get all answers
       const { data: answers } = await supabase
@@ -70,29 +90,137 @@ export default function ScorePage() {
         .select('*')
         .eq('game_id', gameId);
 
-      if (game && players && answers) {
-        // Create structure for each row
-        const rows: RowAnswers[] = [
-          { rowNumber: 0, initials: game.initials_row1, playerAnswers: [] },
-          { rowNumber: 1, initials: game.initials_row2, playerAnswers: [] },
-          { rowNumber: 2, initials: game.initials_row3, playerAnswers: [] }
-        ];
+      console.log('Game data:', game);
+      console.log('Players:', players);
+      console.log('Answers:', answers);
 
-        // For each row, group answers by player
+      if (game && players) {
+        const numTeams = game.num_teams || 2; // Default to 2 teams if not set
+
+        // Generate all 26 rows based on pattern
+        const rows: RowAnswers[] = Array.from({ length: 26 }, (_, i) => {
+          let first = '';
+          let second = '';
+
+          // If we have all 26 initials stored, use them directly
+          if (game.all_initials && game.all_initials.length === 26) {
+            first = game.all_initials[i][0] || 'A';
+            second = game.all_initials[i][1] || 'A';
+          } else {
+            // Fallback to old logic for backwards compatibility
+            const firstInitials = [game.initials_row1[0], game.initials_row2[0], game.initials_row3[0]];
+            const secondInitials = [game.initials_row1[1], game.initials_row2[1], game.initials_row3[1]];
+
+            // Generate first initial for row i
+            if (firstInitials[0] === 'A' && firstInitials[1] === 'B' && firstInitials[2] === 'C') {
+              first = String.fromCharCode(65 + i);
+            } else if (firstInitials[0] === 'Z' && firstInitials[1] === 'Y' && firstInitials[2] === 'X') {
+              first = String.fromCharCode(90 - i);
+            } else {
+              first = firstInitials[i % 3];
+            }
+
+            // Generate second initial for row i
+            if (secondInitials[0] === 'A' && secondInitials[1] === 'B' && secondInitials[2] === 'C') {
+              second = String.fromCharCode(65 + i);
+            } else if (secondInitials[0] === 'Z' && secondInitials[1] === 'Y' && secondInitials[2] === 'X') {
+              second = String.fromCharCode(90 - i);
+            } else {
+              second = secondInitials[i % 3];
+            }
+          }
+
+          return {
+            rowNumber: i,
+            initials: first + second,
+            teamAnswers: []
+          };
+        });
+
+        // Group players by team
+        const teamPlayerMap: Record<number, string[]> = {};
+        players.forEach(player => {
+          if (player.team_number) {
+            if (!teamPlayerMap[player.team_number]) {
+              teamPlayerMap[player.team_number] = [];
+            }
+            teamPlayerMap[player.team_number].push(player.id);
+          }
+        });
+
+        console.log('Team player map:', teamPlayerMap);
+        console.log('Number of teams:', numTeams);
+
+        // For each row, group answers by team
         rows.forEach(row => {
-          players.forEach(player => {
-            const playerRowAnswers = answers
-              .filter(a => a.player_id === player.id && a.row_number === row.rowNumber)
-              .sort((a, b) => a.column_number - b.column_number)
-              .map(a => a.answer_text);
+          for (let teamNum = 1; teamNum <= numTeams; teamNum++) {
+            const teamPlayerIds = teamPlayerMap[teamNum] || [];
 
-            row.playerAnswers.push({
-              playerId: player.id,
-              playerName: player.name,
-              teamNumber: player.team_number,
-              answers: playerRowAnswers,
-              score: 0 // Initialize score to 0
+            // Get the most recent answer for each column from any team member
+            const column2Answer = answers?.find(
+              a => teamPlayerIds.includes(a.player_id) &&
+                   a.row_number === row.rowNumber &&
+                   a.column_number === 2
+            );
+
+            const column3Answer = answers?.find(
+              a => teamPlayerIds.includes(a.player_id) &&
+                   a.row_number === row.rowNumber &&
+                   a.column_number === 3
+            );
+
+            const teamRowAnswers = [];
+            if (column2Answer) teamRowAnswers.push(column2Answer.answer_text);
+            if (column3Answer) teamRowAnswers.push(column3Answer.answer_text);
+
+            if (row.rowNumber === 0 && teamNum === 1) {
+              console.log('Debug row 0, team 1:');
+              console.log('  Team player IDs:', teamPlayerIds);
+              console.log('  Column 2 answer:', column2Answer);
+              console.log('  Column 3 answer:', column3Answer);
+              console.log('  Final answers:', teamRowAnswers);
+            }
+
+            row.teamAnswers.push({
+              teamNumber: teamNum,
+              teamName: NATO_ALPHABET[teamNum - 1],
+              answers: teamRowAnswers,
+              score: 0, // Will be calculated below
+              validation: { status: 'idle' }
             });
+          }
+        });
+
+        // Calculate initial scores based on answer uniqueness
+        rows.forEach(row => {
+          row.teamAnswers.forEach((teamAnswer, teamIdx) => {
+            if (teamAnswer.answers.length !== 2) {
+              // No answer provided - score 0
+              teamAnswer.score = 0;
+            } else {
+              const combinedAnswer = teamAnswer.answers.join(' ').toLowerCase().trim();
+
+              // Count how many teams answered this row
+              const teamsWithAnswers = row.teamAnswers.filter(ta => ta.answers.length === 2);
+
+              // Check if this answer matches any other team's answer
+              const matchingTeams = row.teamAnswers.filter((ta, idx) =>
+                idx !== teamIdx &&
+                ta.answers.length === 2 &&
+                ta.answers.join(' ').toLowerCase().trim() === combinedAnswer
+              );
+
+              if (matchingTeams.length > 0) {
+                // Answer matches another team - score 1
+                teamAnswer.score = 1;
+              } else if (teamsWithAnswers.length === 1) {
+                // Only team to answer - score 5
+                teamAnswer.score = 5;
+              } else {
+                // Unique answer but others answered - score 3
+                teamAnswer.score = 3;
+              }
+            }
           });
         });
 
@@ -105,27 +233,78 @@ export default function ScorePage() {
     fetchAnswers();
   }, [gameId]);
 
-  const handleScoreChange = (rowIndex: number, playerIndex: number, score: number) => {
+  const handleScoreChange = (rowIndex: number, teamIndex: number, score: number) => {
     setRowAnswers(prev => {
       const updated = [...prev];
-      updated[rowIndex].playerAnswers[playerIndex].score = score;
+      updated[rowIndex].teamAnswers[teamIndex].score = score;
       return updated;
     });
   };
 
+  const handleValidate = async (rowIndex: number, teamIndex: number) => {
+    const teamAnswer = rowAnswers[rowIndex].teamAnswers[teamIndex];
+    const combinedAnswer = teamAnswer.answers.join(' ');
+
+    if (!combinedAnswer.trim()) return;
+
+    // Set loading state
+    setRowAnswers(prev => {
+      const updated = [...prev];
+      updated[rowIndex].teamAnswers[teamIndex].validation = { status: 'loading' };
+      return updated;
+    });
+
+    try {
+      // Query Wikipedia API
+      const response = await fetch(
+        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(combinedAnswer)}`
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        // Valid - found on Wikipedia
+        setRowAnswers(prev => {
+          const updated = [...prev];
+          updated[rowIndex].teamAnswers[teamIndex].validation = {
+            status: 'valid',
+            url: data.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(combinedAnswer)}`
+          };
+          return updated;
+        });
+      } else {
+        // Invalid - not found on Wikipedia
+        setRowAnswers(prev => {
+          const updated = [...prev];
+          updated[rowIndex].teamAnswers[teamIndex].validation = { status: 'invalid' };
+          updated[rowIndex].teamAnswers[teamIndex].score = 0; // Set score to 0
+          return updated;
+        });
+      }
+    } catch (error) {
+      console.error('Error validating answer:', error);
+      // Treat error as invalid
+      setRowAnswers(prev => {
+        const updated = [...prev];
+        updated[rowIndex].teamAnswers[teamIndex].validation = { status: 'invalid' };
+        updated[rowIndex].teamAnswers[teamIndex].score = 0;
+        return updated;
+      });
+    }
+  };
+
   const calculateTeamTotals = () => {
-    const playerTotals: Record<string, number> = {};
+    const teamTotals: Record<string, number> = {};
 
     rowAnswers.forEach(row => {
-      row.playerAnswers.forEach(playerAnswer => {
-        if (!playerTotals[playerAnswer.playerName]) {
-          playerTotals[playerAnswer.playerName] = 0;
+      row.teamAnswers.forEach(teamAnswer => {
+        if (!teamTotals[teamAnswer.teamName]) {
+          teamTotals[teamAnswer.teamName] = 0;
         }
-        playerTotals[playerAnswer.playerName] += playerAnswer.score;
+        teamTotals[teamAnswer.teamName] += teamAnswer.score;
       });
     });
 
-    return Object.entries(playerTotals).sort((a, b) => b[1] - a[1]); // Sort by score descending
+    return Object.entries(teamTotals).sort((a, b) => b[1] - a[1]); // Sort by score descending
   };
 
   const handleNewGame = () => {
@@ -136,7 +315,7 @@ export default function ScorePage() {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center p-6">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-800 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading results...</p>
         </div>
       </main>
@@ -144,49 +323,55 @@ export default function ScorePage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col p-6 bg-gray-900">
-      <div className="w-full max-w-6xl mx-auto">
+    <main className="flex min-h-screen flex-col p-3 md:p-6">
+      <div className="w-full max-w-6xl mx-auto mb-12">
+        <Link href="/" className="inline-block mb-8">
+          <h1 className="text-4xl font-light italic text-amber-500 tracking-wide font-[family-name:var(--font-sometype-mono)]">
+            INITIALS
+          </h1>
+        </Link>
+
         <h1 className="text-4xl font-bold text-center mb-8 text-white">
           Scoring
         </h1>
 
         <div className="space-y-8">
           {rowAnswers.map((row) => (
-            <div key={row.rowNumber} className="bg-white rounded-lg shadow-lg p-6">
+            <div key={row.rowNumber} className="bg-gradient-to-r from-cyan-700 to-cyan-600 rounded-lg shadow-lg p-3 md:p-6">
               {/* Row Header with Initials */}
-              <div className="mb-6 pb-4 border-b border-gray-200">
+              <div className="mb-6 pb-4 border-b border-sky-400">
                 <div className="flex items-center justify-center gap-2">
-                  <span className="text-5xl font-bold text-blue-600 font-[family-name:var(--font-roboto-mono)]">{row.initials[0]}</span>
-                  <span className="text-5xl font-bold text-blue-600 font-[family-name:var(--font-roboto-mono)]">{row.initials[1]}</span>
+                  <span className="text-4xl md:text-5xl font-bold text-amber-500 font-[family-name:var(--font-sometype-mono)]">{row.initials[0]}</span>
+                  <span className="text-4xl md:text-5xl font-bold text-amber-500 font-[family-name:var(--font-sometype-mono)]">{row.initials[1]}</span>
                 </div>
               </div>
 
-              {/* Player Answers */}
-              <div className="space-y-4">
-                {row.playerAnswers.map((playerAnswer, playerIdx) => (
-                  <div key={playerIdx} className="flex items-center gap-4">
-                    {/* Player Name */}
-                    <div className="w-32 flex-shrink-0">
-                      <span className="font-semibold text-gray-900">{playerAnswer.playerName}</span>
+              {/* Team Answers */}
+              <div className="space-y-2 md:space-y-4">
+                {row.teamAnswers.map((teamAnswer, teamIdx) => (
+                  <div key={teamIdx} className="flex items-center gap-1 md:gap-4">
+                    {/* Team Name */}
+                    <div className="w-16 md:w-32 flex-shrink-0">
+                      <span className="font-light text-amber-500 text-base md:text-4xl">{teamAnswer.teamName}</span>
                     </div>
 
                     {/* Combined Answers Display */}
-                    <div className="flex-1">
-                      {playerAnswer.answers.length === 2 ? (
-                        <span className="text-gray-900 text-2xl">{playerAnswer.answers.join(' ')}</span>
+                    <div className="flex-1 min-w-0">
+                      {teamAnswer.answers.length === 2 ? (
+                        <span className="text-white text-xl md:text-4xl break-words">{teamAnswer.answers.join(' ')}</span>
                       ) : (
-                        <span className="text-gray-400 italic text-xl">No Answer</span>
+                        <span className="text-sky-200 italic text-base md:text-2xl">No Answer</span>
                       )}
                     </div>
 
                     {/* Score Dropdown */}
-                    <div>
+                    <div className="flex-shrink-0">
                       <select
-                        value={playerAnswer.score}
-                        onChange={(e) => handleScoreChange(row.rowNumber, playerIdx, parseInt(e.target.value))}
-                        disabled={playerAnswer.answers.length !== 2}
-                        className={`px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          playerAnswer.answers.length !== 2 ? 'bg-gray-100 text-gray-400' : 'bg-white'
+                        value={teamAnswer.score}
+                        onChange={(e) => handleScoreChange(row.rowNumber, teamIdx, parseInt(e.target.value))}
+                        disabled={teamAnswer.answers.length !== 2}
+                        className={`w-12 md:w-16 px-1 md:px-2 py-1 md:py-2 border border-sky-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-white text-sm md:text-base ${
+                          teamAnswer.answers.length !== 2 ? 'bg-sky-400 text-sky-200' : 'bg-blue-50'
                         }`}
                       >
                         <option value={0}>0</option>
@@ -194,6 +379,43 @@ export default function ScorePage() {
                         <option value={3}>3</option>
                         <option value={5}>5</option>
                       </select>
+                    </div>
+
+                    {/* Validation */}
+                    <div className="w-16 md:w-20 flex justify-center flex-shrink-0">
+                      {teamAnswer.answers.length === 2 && teamAnswer.validation.status === 'idle' && (
+                        <button
+                          onClick={() => handleValidate(row.rowNumber, teamIdx)}
+                          className="px-2 md:px-4 py-1 md:py-2 bg-blue-50 hover:bg-sky-100 text-sky-700 rounded text-sm md:text-base font-light transition-colors"
+                        >
+                          <span className="md:hidden">?</span>
+                          <span className="hidden md:inline">Validate</span>
+                        </button>
+                      )}
+                      {teamAnswer.validation.status === 'loading' && (
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-4 w-4 md:h-6 md:w-6 border-b-2 border-white"></div>
+                        </div>
+                      )}
+                      {teamAnswer.validation.status === 'valid' && (
+                        <a
+                          href={teamAnswer.validation.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-0.5 md:gap-2 text-green-500 hover:text-green-400"
+                        >
+                          <svg className="w-4 h-4 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                        </a>
+                      )}
+                      {teamAnswer.validation.status === 'invalid' && (
+                        <div className="flex items-center justify-center text-red-500">
+                          <svg className="w-4 h-4 md:w-6 md:w-6" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -203,13 +425,13 @@ export default function ScorePage() {
         </div>
 
         {/* Team Totals */}
-        <div className="mt-8 bg-white rounded-lg shadow-lg p-6">
-          <h2 className="text-3xl font-bold text-center mb-6 text-gray-900">Team Totals</h2>
+        <div className="mt-8 bg-gradient-to-r from-cyan-800 to-cyan-700 rounded-lg shadow-lg p-3 md:p-6">
+          <h2 className="text-3xl font-bold text-center mb-6 text-white">Team Totals</h2>
           <div className="space-y-3">
             {calculateTeamTotals().map(([teamName, total]) => (
-              <div key={teamName} className="flex items-center justify-between py-3 px-6 bg-gray-50 rounded-lg">
-                <span className="text-2xl font-semibold text-gray-900">{teamName}</span>
-                <span className="text-3xl font-bold text-blue-600">{total}</span>
+              <div key={teamName} className="flex items-center justify-between py-3 px-6 bg-sky-600/30 rounded-lg">
+                <span className="text-2xl font-light text-white">{teamName}</span>
+                <span className="text-3xl font-bold text-white">{total}</span>
               </div>
             ))}
           </div>
@@ -218,7 +440,7 @@ export default function ScorePage() {
         <div className="mt-8 text-center">
           <button
             onClick={handleNewGame}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-8 rounded-lg text-lg transition-colors shadow-lg"
+            className="bg-cyan-800 hover:bg-cyan-900 text-white font-light py-4 px-8 rounded-lg text-2xl transition-colors shadow-lg"
           >
             New Game
           </button>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
 interface GameBoardProps {
@@ -13,6 +13,7 @@ interface GameBoardProps {
   initialsRow1: string;
   initialsRow2: string;
   initialsRow3: string;
+  allInitials?: string[];
 }
 
 interface Answer {
@@ -25,11 +26,11 @@ interface Answer {
   word2Valid: boolean;
 }
 
-export default function GameBoard({ gameId, timerDuration, startedAt, isInitiator, onReset, onScoreGame, initialsRow1, initialsRow2, initialsRow3 }: GameBoardProps) {
+export default function GameBoard({ gameId, timerDuration, startedAt, isInitiator, onReset, onScoreGame, initialsRow1, initialsRow2, initialsRow3, allInitials }: GameBoardProps) {
   const [timeRemaining, setTimeRemaining] = useState(timerDuration);
   const [isActive, setIsActive] = useState(true);
 
-  // Initialize 26 rows (A-Z)
+  // Initialize 26 rows
   const [answers, setAnswers] = useState<Answer[]>(
     Array.from({ length: 26 }, (_, i) => ({
       row: i,
@@ -42,22 +43,38 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
     }))
   );
   const [playerId, setPlayerId] = useState<string | null>(null);
+  const [teamNumber, setTeamNumber] = useState<number | null>(null);
+  const [teamPlayerIds, setTeamPlayerIds] = useState<string[]>([]);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Get current player ID
+  // Get current player ID, team number, and all team member IDs
   useEffect(() => {
     const getCurrentPlayer = async () => {
-      // For now, we'll get the most recent player for this game
-      // In a real app, you'd want to store the player ID in session/localStorage
-      const { data } = await supabase
-        .from('players')
-        .select('id')
-        .eq('game_id', gameId)
-        .order('joined_at', { ascending: false })
-        .limit(1)
-        .single();
+      // Get current player from localStorage
+      const storedPlayerId = localStorage.getItem(`player_${gameId}`);
 
-      if (data) {
-        setPlayerId(data.id);
+      if (storedPlayerId) {
+        const { data: currentPlayer } = await supabase
+          .from('players')
+          .select('id, team_number')
+          .eq('id', storedPlayerId)
+          .single();
+
+        if (currentPlayer) {
+          setPlayerId(currentPlayer.id);
+          setTeamNumber(currentPlayer.team_number);
+
+          // Get all players on the same team
+          const { data: teamPlayers } = await supabase
+            .from('players')
+            .select('id')
+            .eq('game_id', gameId)
+            .eq('team_number', currentPlayer.team_number);
+
+          if (teamPlayers) {
+            setTeamPlayerIds(teamPlayers.map(p => p.id));
+          }
+        }
       }
     };
 
@@ -101,14 +118,28 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
     return () => clearInterval(interval);
   }, [startedAt, timerDuration]);
 
-  // Set initials from game data - generate all 26 rows based on the pattern
+  // Set initials from game data - generate all 26 rows based on pattern
   useEffect(() => {
+    // If we have all 26 initials stored, use them directly
+    if (allInitials && allInitials.length === 26) {
+      const newAnswers = Array.from({ length: 26 }, (_, i) => ({
+        row: i,
+        initial1: allInitials[i][0] || 'A',
+        initial2: allInitials[i][1] || 'A',
+        word1: '',
+        word2: '',
+        word1Valid: true,
+        word2Valid: true
+      }));
+      setAnswers(newAnswers);
+      return;
+    }
+
+    // Fallback to old logic for backwards compatibility
     if (initialsRow1 && initialsRow2 && initialsRow3) {
-      // Extract the pattern from the first 3 rows
       const firstInitials = [initialsRow1[0], initialsRow2[0], initialsRow3[0]];
       const secondInitials = [initialsRow1[1], initialsRow2[1], initialsRow3[1]];
 
-      // Detect pattern and generate all 26 rows
       const newAnswers = Array.from({ length: 26 }, (_, i) => {
         let first = '';
         let second = '';
@@ -116,10 +147,10 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
         // Generate first initial for row i
         if (firstInitials[0] === 'A' && firstInitials[1] === 'B' && firstInitials[2] === 'C') {
           // A to Z pattern
-          first = String.fromCharCode(65 + i); // A=65
+          first = String.fromCharCode(65 + i);
         } else if (firstInitials[0] === 'Z' && firstInitials[1] === 'Y' && firstInitials[2] === 'X') {
           // Z to A pattern
-          first = String.fromCharCode(90 - i); // Z=90
+          first = String.fromCharCode(90 - i);
         } else {
           // Random or custom - use the stored value for first 3, then cycle
           first = firstInitials[i % 3];
@@ -150,7 +181,105 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
 
       setAnswers(newAnswers);
     }
-  }, [initialsRow1, initialsRow2, initialsRow3]);
+  }, [initialsRow1, initialsRow2, initialsRow3, allInitials]);
+
+  // Load existing answers from team members and subscribe to changes
+  useEffect(() => {
+    if (teamPlayerIds.length === 0) return;
+
+    const loadTeamAnswers = async () => {
+      // Load all answers from team members
+      const { data: teamAnswers } = await supabase
+        .from('answers')
+        .select('*')
+        .eq('game_id', gameId)
+        .in('player_id', teamPlayerIds);
+
+      if (teamAnswers) {
+        // Merge team answers into current answers state
+        setAnswers(prev => {
+          const newAnswers = [...prev];
+
+          teamAnswers.forEach(answer => {
+            const row = answer.row_number;
+            if (row >= 0 && row < 26) {
+              if (answer.column_number === 2) {
+                newAnswers[row] = {
+                  ...newAnswers[row],
+                  word1: answer.answer_text,
+                  word1Valid: validateWord(answer.answer_text, newAnswers[row].initial1)
+                };
+              } else if (answer.column_number === 3) {
+                newAnswers[row] = {
+                  ...newAnswers[row],
+                  word2: answer.answer_text,
+                  word2Valid: validateWord(answer.answer_text, newAnswers[row].initial2)
+                };
+              }
+            }
+          });
+
+          return newAnswers;
+        });
+      }
+    };
+
+    loadTeamAnswers();
+
+    // Subscribe to real-time answer changes from team members
+    const answersSubscription = supabase
+      .channel(`team-answers-${gameId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'answers',
+          filter: `game_id=eq.${gameId}`
+        },
+        (payload) => {
+          const answer = payload.new as any;
+
+          // Only update if this answer is from a team member
+          if (teamPlayerIds.includes(answer.player_id)) {
+            setAnswers(prev => {
+              const newAnswers = [...prev];
+              const row = answer.row_number;
+
+              if (row >= 0 && row < 26) {
+                if (answer.column_number === 2) {
+                  newAnswers[row] = {
+                    ...newAnswers[row],
+                    word1: answer.answer_text,
+                    word1Valid: validateWord(answer.answer_text, newAnswers[row].initial1)
+                  };
+                } else if (answer.column_number === 3) {
+                  newAnswers[row] = {
+                    ...newAnswers[row],
+                    word2: answer.answer_text,
+                    word2Valid: validateWord(answer.answer_text, newAnswers[row].initial2)
+                  };
+                }
+              }
+
+              return newAnswers;
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      answersSubscription.unsubscribe();
+    };
+  }, [teamPlayerIds, gameId]);
+
+  // Auto-scroll to bottom for initiator when timer completes
+  useEffect(() => {
+    if (!isActive && isInitiator && bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [isActive, isInitiator]);
 
   const validateWord = (word: string, initial: string): boolean => {
     if (!word.trim()) return true; // Empty is valid (no error shown)
@@ -177,6 +306,80 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
         }
       })
     );
+  };
+
+  const handleInputBlur = async (row: number, column: 1 | 2) => {
+    if (!playerId) return;
+
+    const answer = answers[row];
+    const text = column === 1 ? answer.word1 : answer.word2;
+    const capitalized = text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
+    const initial = column === 1 ? answer.initial1 : answer.initial2;
+    const initials = answer.initial1 + answer.initial2;
+
+    // Update local state with capitalized text
+    setAnswers(prev =>
+      prev.map(a => {
+        if (a.row !== row) return a;
+
+        if (column === 1) {
+          return {
+            ...a,
+            word1: capitalized,
+            word1Valid: validateWord(capitalized, a.initial1)
+          };
+        } else {
+          return {
+            ...a,
+            word2: capitalized,
+            word2Valid: validateWord(capitalized, a.initial2)
+          };
+        }
+      })
+    );
+
+    // Save to database
+    const columnNumber = column === 1 ? 2 : 3;
+
+    if (capitalized.trim() !== '') {
+      // First delete any existing answer, then insert new one
+      await supabase
+        .from('answers')
+        .delete()
+        .eq('game_id', gameId)
+        .eq('player_id', playerId)
+        .eq('row_number', row)
+        .eq('column_number', columnNumber);
+
+      // Insert new answer
+      const { error } = await supabase
+        .from('answers')
+        .insert({
+          game_id: gameId,
+          player_id: playerId,
+          initials: initials,
+          answer_text: capitalized,
+          column_number: columnNumber,
+          row_number: row
+        });
+
+      if (error) {
+        console.error('Error saving answer:', error);
+      }
+    } else {
+      // Delete answer if text is empty
+      const { error } = await supabase
+        .from('answers')
+        .delete()
+        .eq('game_id', gameId)
+        .eq('player_id', playerId)
+        .eq('row_number', row)
+        .eq('column_number', columnNumber);
+
+      if (error && error.code !== 'PGRST116') { // Ignore "not found" errors
+        console.error('Error deleting answer:', error);
+      }
+    }
   };
 
   const handleSubmitAnswers = async () => {
@@ -243,16 +446,16 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
       </div>
 
       {/* Game Board */}
-      <div className="bg-white rounded-lg shadow-lg p-6">
-        <div className="space-y-3">
+      <div className="bg-gradient-to-r from-cyan-700 to-cyan-600 rounded-lg shadow-lg p-3 md:p-6">
+        <div className="space-y-2 md:space-y-3">
           {answers.map((answer) => (
-            <div key={answer.row} className="grid grid-cols-[5rem_1fr_1fr] gap-4 items-center py-2">
+            <div key={answer.row} className="grid grid-cols-[4rem_1fr_1fr] md:grid-cols-[5rem_1fr_1fr] gap-2 md:gap-4 items-center py-1 md:py-2">
               {/* Column 1: Initials for this row */}
               <div className="flex items-center justify-center gap-1">
-                <div className="text-3xl font-bold tracking-wider text-blue-600 font-[family-name:var(--font-roboto-mono)]">
+                <div className="text-3xl font-bold tracking-wider text-amber-500 font-[family-name:var(--font-sometype-mono)]">
                   {answer.initial1}
                 </div>
-                <div className="text-3xl font-bold tracking-wider text-blue-600 font-[family-name:var(--font-roboto-mono)]">
+                <div className="text-3xl font-bold tracking-wider text-amber-500 font-[family-name:var(--font-sometype-mono)]">
                   {answer.initial2}
                 </div>
               </div>
@@ -263,8 +466,13 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
                   type="text"
                   value={answer.word1}
                   onChange={(e) => handleInputChange(answer.row, 1, e.target.value)}
+                  onBlur={() => handleInputBlur(answer.row, 1)}
                   disabled={!isActive}
-                  className={`w-full px-3 py-2 border-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-base text-gray-900 ${
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                  className={`w-full px-2 md:px-3 py-2 border-2 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-800 disabled:bg-gray-100 disabled:cursor-not-allowed text-lg md:text-xl text-gray-900 ${
                     !answer.word1Valid ? 'border-red-500 bg-red-50' : 'border-gray-300'
                   }`}
                   placeholder={isActive ? `${answer.initial1}...` : ''}
@@ -277,8 +485,13 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
                   type="text"
                   value={answer.word2}
                   onChange={(e) => handleInputChange(answer.row, 2, e.target.value)}
+                  onBlur={() => handleInputBlur(answer.row, 2)}
                   disabled={!isActive}
-                  className={`w-full px-3 py-2 border-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-base text-gray-900 ${
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                  className={`w-full px-2 md:px-3 py-2 border-2 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-800 disabled:bg-gray-100 disabled:cursor-not-allowed text-lg md:text-xl text-gray-900 ${
                     !answer.word2Valid ? 'border-red-500 bg-red-50' : 'border-gray-300'
                   }`}
                   placeholder={isActive ? `${answer.initial2}...` : ''}
@@ -289,23 +502,26 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
         </div>
 
         {!isActive && (
-          <div className="mt-6 pt-6 border-t border-gray-200 text-center space-y-3">
-            <p className="text-lg font-semibold text-gray-900">Time&apos;s up!</p>
-            <p className="text-gray-600">Your answers have been submitted.</p>
+          <div ref={bottomRef} className="mt-6 pt-6 border-t border-sky-400 text-center space-y-3">
+            <p className="text-lg font-light text-white">Time&apos;s up!</p>
+            <p className="text-sky-200">Your answers have been submitted.</p>
 
-            {isInitiator && (
+            {isInitiator ? (
               <div className="flex gap-3 justify-center pt-2">
                 <button
                   onClick={onScoreGame}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                  className="bg-cyan-800 hover:bg-cyan-900 text-white font-light py-3 px-6 rounded-lg text-2xl transition-colors"
                 >
                   Score Game
                 </button>
+              </div>
+            ) : (
+              <div className="flex gap-3 justify-center pt-2">
                 <button
-                  onClick={onReset}
-                  className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                  onClick={() => window.location.href = '/'}
+                  className="bg-cyan-800 hover:bg-cyan-900 text-white font-light py-3 px-6 rounded-lg text-2xl transition-colors"
                 >
-                  Reset Game
+                  Return to Home
                 </button>
               </div>
             )}

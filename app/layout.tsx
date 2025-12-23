@@ -1,16 +1,21 @@
-import type { Metadata } from "next";
-import { Nunito, Roboto_Mono } from "next/font/google";
-import "./globals.css";
+import type { Metadata } from 'next';
+import { Sometype_Mono, Mukta } from 'next/font/google';
+import './globals.css';
+import ScrollToTop from '@/components/ScrollToTop';
 
-const nunito = Nunito({ subsets: ["latin"] });
-const robotoMono = Roboto_Mono({
-  subsets: ["latin"],
-  variable: '--font-roboto-mono'
+const sometypeMono = Sometype_Mono({
+  subsets: ['latin'],
+  variable: '--font-sometype-mono',
+});
+
+const mukta = Mukta({
+  subsets: ['latin'],
+  weight: ['200', '300', '400', '500', '600', '700', '800'],
 });
 
 export const metadata: Metadata = {
-  title: "Initials - The Fast-Paced Word Game",
-  description: "Fill in words for every letter A-Z before time runs out!",
+  title: 'INITIALS',
+  description: 'A game not for the faint of heart.',
 };
 
 export default function RootLayout({
@@ -19,8 +24,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${nunito.className} ${robotoMono.variable}`}>{children}</body>
+    <html lang='en'>
+      <body
+        className={`${mukta.className} ${sometypeMono.variable} bg-gradient-to-br from-indigo-900 to-indigo-950 min-h-screen`}
+      >
+        <ScrollToTop />
+        {children}
+      </body>
     </html>
   );
 }

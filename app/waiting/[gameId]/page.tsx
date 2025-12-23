@@ -2,7 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+
+// NATO phonetic alphabet for team names
+const NATO_ALPHABET = [
+  'Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel',
+  'India', 'Juliet', 'Kilo', 'Lima', 'Mike', 'November', 'Oscar', 'Papa',
+  'Quebec', 'Romeo', 'Sierra', 'Tango', 'Uniform', 'Victor', 'Whiskey',
+  'X-ray', 'Yankee', 'Zulu'
+];
 
 interface Player {
   id: string;
@@ -19,6 +28,12 @@ interface Game {
   timer_duration: number;
 }
 
+interface TeamInfo {
+  teamNumber: number;
+  teamName: string;
+  playerCount: number;
+}
+
 export default function WaitingRoomPage() {
   const router = useRouter();
   const params = useParams();
@@ -26,8 +41,31 @@ export default function WaitingRoomPage() {
 
   const [game, setGame] = useState<Game | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [teams, setTeams] = useState<TeamInfo[]>([]);
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Organize players into teams
+  const organizeTeams = (gameData: Game, playersData: Player[]) => {
+    const teamMap: Record<number, number> = {};
+
+    playersData.forEach(player => {
+      if (player.team_number) {
+        teamMap[player.team_number] = (teamMap[player.team_number] || 0) + 1;
+      }
+    });
+
+    const teamInfo: TeamInfo[] = [];
+    for (let i = 1; i <= gameData.num_teams; i++) {
+      teamInfo.push({
+        teamNumber: i,
+        teamName: NATO_ALPHABET[i - 1],
+        playerCount: teamMap[i] || 0
+      });
+    }
+
+    setTeams(teamInfo);
+  };
 
   useEffect(() => {
     if (!gameId) return;
@@ -62,6 +100,12 @@ export default function WaitingRoomPage() {
       setGame(gameData);
       setPlayers(playersData || []);
       setCurrentPlayer(currentPlayerData);
+
+      // Organize players into teams
+      if (gameData && playersData) {
+        organizeTeams(gameData, playersData);
+      }
+
       setLoading(false);
     };
 
@@ -138,7 +182,7 @@ export default function WaitingRoomPage() {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center p-6">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-800 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading...</p>
         </div>
       </main>
@@ -152,7 +196,7 @@ export default function WaitingRoomPage() {
           <p className="text-red-600">Game not found</p>
           <button
             onClick={() => router.push('/')}
-            className="mt-4 text-blue-600 hover:text-blue-700 font-medium"
+            className="mt-4 text-cyan-800 hover:text-cyan-900 font-medium text-xl"
           >
             Back to Home
           </button>
@@ -162,39 +206,78 @@ export default function WaitingRoomPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-900">
-      <div className="w-full max-w-md">
-        <h1 className="text-4xl font-bold text-center mb-2 text-white">
+    <main className="flex min-h-screen flex-col p-6">
+      <div className="w-full max-w-md mx-auto mb-12">
+        <Link href="/" className="inline-block mb-8">
+          <h1 className="text-4xl font-light italic text-amber-500 tracking-wide font-[family-name:var(--font-sometype-mono)]">
+            INITIALS
+          </h1>
+        </Link>
+
+        <h1 className="text-4xl font-bold text-center mb-6 text-white">
           Waiting Room
         </h1>
 
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <div className="bg-gradient-to-r from-cyan-700 to-cyan-600 rounded-lg shadow-lg p-6 mb-6">
           <div className="text-center mb-6">
-            <p className="text-sm text-gray-600 mb-2">Game Code</p>
-            <p className="text-4xl font-bold text-blue-600 tracking-wider">{game.code}</p>
-            <p className="text-sm text-gray-500 mt-2">Share this code with other players</p>
+            <p className="text-amber-500 mb-2">Game Code</p>
+            <p className="text-4xl font-bold text-white tracking-wider">{game.code}</p>
+            <p className="text-sm text-sky-200 mt-2">Share this code with other players</p>
           </div>
 
-          <div className="border-t border-gray-200 pt-6">
-            <h2 className="font-semibold text-gray-900 mb-4">
-              Players ({players.length})
+          <div className="border-t border-sky-400 pt-6">
+            <h2 className="font-light text-amber-500 mb-4">
+              Teams ({players.length} {players.length === 1 ? 'player' : 'players'})
             </h2>
             <div className="space-y-2">
-              {players.map((player) => (
+              {teams.map((team) => (
                 <div
-                  key={player.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  key={team.teamNumber}
+                  className="flex items-center justify-between p-3 bg-sky-500/30 rounded-lg"
                 >
-                  <span className="font-medium text-gray-900">{player.name}</span>
-                  {player.is_initiator && (
-                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                      Host
-                    </span>
-                  )}
+                  <span className="font-medium text-white">{team.teamName}</span>
+                  <span className="text-lg text-amber-500">
+                    {team.playerCount} {team.playerCount === 1 ? 'player' : 'players'}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
+
+          {currentPlayer && (
+            <div className="border-t border-sky-400 pt-6 mt-6">
+              <h2 className="font-light text-amber-500 mb-2">Your Team</h2>
+              <p className="text-white mb-4">
+                {currentPlayer.team_number ? NATO_ALPHABET[currentPlayer.team_number - 1] : 'Not assigned'}
+              </p>
+              <label htmlFor="changeTeam" className="block text-lg font-medium text-amber-500 mb-2">
+                Change Team
+              </label>
+              <select
+                id="changeTeam"
+                value={currentPlayer.team_number || 1}
+                onChange={async (e) => {
+                  const newTeam = parseInt(e.target.value);
+                  const { error } = await supabase
+                    .from('players')
+                    .update({ team_number: newTeam })
+                    .eq('id', currentPlayer.id);
+
+                  if (error) {
+                    console.error('Error changing team:', error);
+                    alert('Failed to change team. Please try again.');
+                  }
+                }}
+                className="w-full pl-4 pr-10 py-3 border border-sky-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-white text-gray-900 bg-blue-50 text-lg"
+              >
+                {teams.map((team) => (
+                  <option key={team.teamNumber} value={team.teamNumber}>
+                    {team.teamName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {currentPlayer?.is_initiator ? (
@@ -202,7 +285,7 @@ export default function WaitingRoomPage() {
             <button
               onClick={handleStartGame}
               disabled={players.length < 2}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-4 px-6 rounded-lg text-lg transition-colors shadow-lg"
+              className="w-full bg-cyan-800 hover:bg-cyan-900 disabled:bg-cyan-950 text-white font-light py-4 px-6 rounded-lg text-2xl transition-colors shadow-lg"
             >
               Let&apos;s Play
             </button>
