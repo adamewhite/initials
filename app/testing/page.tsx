@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { CircleHelp, CheckCircle, XCircle } from 'lucide-react';
 
 type InitialDirection = 'A_TO_Z' | 'Z_TO_A' | 'RANDOM' | 'RANDOM_FIRST_NAMES' | 'RANDOM_LAST_NAMES' | 'CUSTOM_TEXT';
 
@@ -511,10 +512,9 @@ function MockScoring() {
                     {teamAnswer.answers.length === 2 && teamAnswer.validation.status === 'idle' && (
                       <button
                         onClick={() => handleValidate(row.rowNumber, teamIdx)}
-                        className="px-2 md:px-4 py-1 md:py-2 bg-blue-50 hover:bg-sky-100 text-sky-700 rounded text-sm md:text-sm font-light transition-colors"
+                        className="text-white hover:text-sky-200 transition-colors"
                       >
-                        <span className="md:hidden">?</span>
-                        <span className="hidden md:inline">Validate</span>
+                        <CircleHelp className="w-5 h-5 md:w-6 md:h-6" />
                       </button>
                     )}
                     {teamAnswer.validation.status === 'loading' && (
@@ -527,19 +527,15 @@ function MockScoring() {
                         href={teamAnswer.validation.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-0.5 md:gap-2 text-green-700 hover:text-green-600"
+                        className="text-green-500 hover:text-green-400 transition-colors"
                       >
-                        <svg className="w-4 h-4 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                        </svg>
+                        <CheckCircle className="w-5 h-5 md:w-6 md:h-6" />
                       </a>
                     )}
                     {teamAnswer.validation.status === 'invalid' && (
-                      <div className="flex items-center justify-center text-red-700">
-                        <svg className="w-4 h-4 md:w-6 md:w-6" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
-                      </div>
+                      <button className="text-red-500 cursor-default">
+                        <XCircle className="w-5 h-5 md:w-6 md:h-6" />
+                      </button>
                     )}
                   </div>
                 </div>
