@@ -332,31 +332,50 @@ const NATO_ALPHABET = [
   'X-ray', 'Yankee', 'Zulu'
 ];
 
+interface ValidationResult {
+  status: 'idle' | 'loading' | 'valid' | 'invalid';
+  url?: string;
+}
+
+interface TeamAnswer {
+  teamNumber: number;
+  teamName: string;
+  answers: string[];
+  score: number;
+  validation: ValidationResult;
+}
+
+interface RowAnswers {
+  rowNumber: number;
+  initials: string;
+  teamAnswers: TeamAnswer[];
+}
+
 // Mock Scoring Component
 function MockScoring() {
-  const [rowAnswers, setRowAnswers] = useState([
+  const [rowAnswers, setRowAnswers] = useState<RowAnswers[]>([
     {
       rowNumber: 0,
       initials: 'AZ',
       teamAnswers: [
-        { teamNumber: 1, teamName: 'Alpha', answers: ['Apple', 'Zebra'], score: 1, validation: { status: 'idle' as const } },
-        { teamNumber: 2, teamName: 'Bravo', answers: ['Ant', 'Zone'], score: 3, validation: { status: 'idle' as const } },
+        { teamNumber: 1, teamName: 'Alpha', answers: ['Apple', 'Zebra'], score: 1, validation: { status: 'idle' } },
+        { teamNumber: 2, teamName: 'Bravo', answers: ['Ant', 'Zone'], score: 3, validation: { status: 'idle' } },
       ]
     },
     {
       rowNumber: 1,
       initials: 'BY',
       teamAnswers: [
-        { teamNumber: 1, teamName: 'Alpha', answers: ['Brigham', 'Young'], score: 5, validation: { status: 'idle' as const } },
-        { teamNumber: 2, teamName: 'Bravo', answers: [], score: 0, validation: { status: 'idle' as const } },
+        { teamNumber: 1, teamName: 'Alpha', answers: ['Brigham', 'Young'], score: 5, validation: { status: 'idle' } },
+        { teamNumber: 2, teamName: 'Bravo', answers: [], score: 0, validation: { status: 'idle' } },
       ]
     },
     {
       rowNumber: 2,
       initials: 'CX',
       teamAnswers: [
-        { teamNumber: 1, teamName: 'Alpha', answers: ['Cat', 'Xray'], score: 3, validation: { status: 'idle' as const } },
-        { teamNumber: 2, teamName: 'Bravo', answers: ['Cup', 'Xylophone'], score: 3, validation: { status: 'idle' as const } },
+        { teamNumber: 1, teamName: 'Alpha', answers: ['Cat', 'Xray'], score: 3, validation: { status: 'idle' } },
+        { teamNumber: 2, teamName: 'Bravo', answers: ['Cup', 'Xylophone'], score: 3, validation: { status: 'idle' } },
       ]
     },
   ]);
