@@ -366,6 +366,17 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
         currentPlayerId: playerId
       });
 
+      // First, query to see if matching records exist
+      const { data: existingAnswers } = await supabase
+        .from('answers')
+        .select('*')
+        .eq('game_id', gameId)
+        .in('player_id', teamPlayerIds)
+        .eq('row_number', row)
+        .eq('column_number', columnNumber);
+
+      console.log('[GameBoard] Existing answers found before delete:', existingAnswers);
+
       const { data: deletedData, error: deleteError } = await supabase
         .from('answers')
         .delete()
