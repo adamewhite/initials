@@ -100,15 +100,16 @@ export default function ScorePage() {
         .select('id, team_number')
         .eq('game_id', gameId);
 
-      // Get all answers
+      // Get all answers ordered by created_at descending to get most recent
       const { data: answers } = await supabase
         .from('answers')
         .select('*')
-        .eq('game_id', gameId);
+        .eq('game_id', gameId)
+        .order('created_at', { ascending: false });
 
       console.log('Game data:', game);
       console.log('Players:', players);
-      console.log('Answers:', answers);
+      console.log('Answers (ordered by created_at desc):', answers);
 
       if (game && players) {
         const numTeams = game.num_teams || 2; // Default to 2 teams if not set
@@ -173,6 +174,7 @@ export default function ScorePage() {
             const teamPlayerIds = teamPlayerMap[teamNum] || [];
 
             // Get the most recent answer for each column from any team member
+            // Since answers are ordered by created_at desc, .find() gets the most recent
             const column2Answer = answers?.find(
               a => teamPlayerIds.includes(a.player_id) &&
                    a.row_number === row.rowNumber &&
@@ -192,8 +194,14 @@ export default function ScorePage() {
             if (row.rowNumber === 0 && teamNum === 1) {
               console.log('Debug row 0, team 1:');
               console.log('  Team player IDs:', teamPlayerIds);
-              console.log('  Column 2 answer:', column2Answer);
-              console.log('  Column 3 answer:', column3Answer);
+              console.log('  All matching column 2 answers:', answers?.filter(
+                a => teamPlayerIds.includes(a.player_id) && a.row_number === 0 && a.column_number === 2
+              ));
+              console.log('  Column 2 answer (most recent):', column2Answer);
+              console.log('  All matching column 3 answers:', answers?.filter(
+                a => teamPlayerIds.includes(a.player_id) && a.row_number === 0 && a.column_number === 3
+              ));
+              console.log('  Column 3 answer (most recent):', column3Answer);
               console.log('  Final answers:', teamRowAnswers);
             }
 
@@ -270,8 +278,10 @@ export default function ScorePage() {
           filter: `game_id=eq.${gameId}`
         },
         (payload) => {
-          console.log('Answer change received on scoring page:', payload);
+          const timestamp = new Date().toISOString();
+          console.log(`[${timestamp}] Answer change received on scoring page:`, payload.eventType, payload);
           // Refetch all answers to recalculate scores
+          console.log(`[${timestamp}] Refetching answers...`);
           fetchAnswers();
         }
       )
