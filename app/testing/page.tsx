@@ -207,7 +207,7 @@ function MockGameBoard() {
         isScrolled ? 'py-2 shadow-lg' : 'py-6'
       }`}>
         <div className="text-center">
-          <div className={`font-bold transition-all duration-300 ${
+          <div className={`font-bold transition-[font-size] duration-300 ${
             isScrolled ? 'text-3xl' : 'text-6xl'
           } ${
             timeRemaining <= 30 ? 'text-red-600 animate-pulse' :
