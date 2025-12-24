@@ -16,6 +16,25 @@ const archivo = Archivo({
 export const metadata: Metadata = {
   title: 'INITIALS',
   description: 'A game not for the faint of heart.',
+  openGraph: {
+    title: 'INITIALS',
+    description: 'A game not for the faint of heart.',
+    type: 'website',
+    images: [
+      {
+        url: '/og_image.png',
+        width: 1200,
+        height: 630,
+        alt: 'INITIALS - A game not for the faint of heart',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'INITIALS',
+    description: 'A game not for the faint of heart.',
+    images: ['/og_image.png'],
+  },
 };
 
 export default function RootLayout({
