@@ -359,9 +359,11 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
       console.log('[GameBoard] Deleting existing answers before insert:', {
         gameId,
         teamPlayerIds,
+        teamPlayerCount: teamPlayerIds.length,
         row,
         columnNumber,
-        newAnswer: capitalized
+        newAnswer: capitalized,
+        currentPlayerId: playerId
       });
 
       const { data: deletedData, error: deleteError } = await supabase
