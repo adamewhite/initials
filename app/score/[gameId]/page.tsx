@@ -257,6 +257,31 @@ export default function ScorePage() {
     };
 
     fetchAnswers();
+
+    // Subscribe to real-time answer changes
+    const answersSubscription = supabase
+      .channel(`scoring-answers-${gameId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'answers',
+          filter: `game_id=eq.${gameId}`
+        },
+        (payload) => {
+          console.log('Answer change received on scoring page:', payload);
+          // Refetch all answers to recalculate scores
+          fetchAnswers();
+        }
+      )
+      .subscribe((status) => {
+        console.log('Scoring answers subscription status:', status);
+      });
+
+    return () => {
+      answersSubscription.unsubscribe();
+    };
   }, [gameId]);
 
   const handleScoreChange = (rowIndex: number, teamIndex: number, score: number) => {
