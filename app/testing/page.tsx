@@ -390,7 +390,7 @@ interface RowAnswers {
 }
 
 // Mock Scoring Component
-function MockScoring() {
+function MockScoring({ isInitiator }: { isInitiator: boolean }) {
   const [rowAnswers, setRowAnswers] = useState<RowAnswers[]>([
     {
       rowNumber: 0,
@@ -532,9 +532,9 @@ function MockScoring() {
                     <select
                       value={teamAnswer.score}
                       onChange={(e) => handleScoreChange(row.rowNumber, teamIdx, parseInt(e.target.value))}
-                      disabled={teamAnswer.answers.length !== 2}
-                      className={`w-10 md:w-16 px-1 md:px-2 py-1 md:py-2 border border-sky-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-white text-sm md:text-base ${
-                        teamAnswer.answers.length !== 2 ? 'bg-sky-400 text-sky-200' : 'bg-blue-50'
+                      disabled={teamAnswer.answers.length !== 2 || !isInitiator}
+                      className={`w-10 md:w-16 px-1 md:px-2 py-1 md:py-2 border border-sky-300 rounded focus:outline-none focus:ring-2 focus:ring-white text-sm md:text-base ${
+                        teamAnswer.answers.length !== 2 || !isInitiator ? 'bg-sky-100 text-gray-700 cursor-not-allowed' : 'bg-blue-50 text-gray-900'
                       }`}
                     >
                       <option value={0}>0</option>
@@ -599,7 +599,7 @@ function MockScoring() {
 }
 
 export default function TestingPage() {
-  const [view, setView] = useState<'gameboard' | 'scoring' | 'initiate' | 'join'>('gameboard');
+  const [view, setView] = useState<'gameboard' | 'scoring-initiator' | 'scoring-non-initiator'>('gameboard');
 
   return (
     <main className="flex min-h-screen flex-col p-3 md:p-6">
@@ -625,14 +625,24 @@ export default function TestingPage() {
             Game Board
           </button>
           <button
-            onClick={() => setView('scoring')}
+            onClick={() => setView('scoring-initiator')}
             className={`px-4 py-2 rounded-md font-light transition-colors ${
-              view === 'scoring'
+              view === 'scoring-initiator'
                 ? 'bg-cyan-800 text-white'
                 : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
             }`}
           >
-            Scoring
+            Scoring (Initiator)
+          </button>
+          <button
+            onClick={() => setView('scoring-non-initiator')}
+            className={`px-4 py-2 rounded-md font-light transition-colors ${
+              view === 'scoring-non-initiator'
+                ? 'bg-cyan-800 text-white'
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            Scoring (Non-Initiator)
           </button>
           <Link
             href="/create"
@@ -657,7 +667,8 @@ export default function TestingPage() {
 
       {/* Content */}
       {view === 'gameboard' && <MockGameBoard />}
-      {view === 'scoring' && <MockScoring />}
+      {view === 'scoring-initiator' && <MockScoring isInitiator={true} />}
+      {view === 'scoring-non-initiator' && <MockScoring isInitiator={false} />}
     </main>
   );
 }

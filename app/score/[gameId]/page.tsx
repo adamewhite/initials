@@ -62,6 +62,7 @@ export default function ScorePage() {
 
   const [rowAnswers, setRowAnswers] = useState<RowAnswers[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isInitiator, setIsInitiator] = useState(false);
 
   // Scroll to top on mount
   useEffect(() => {
@@ -72,6 +73,20 @@ export default function ScorePage() {
     if (!gameId) return;
 
     const fetchAnswers = async () => {
+      // Get current player to check if they're the initiator
+      const playerId = localStorage.getItem(`player_${gameId}`);
+      if (playerId) {
+        const { data: playerData } = await supabase
+          .from('players')
+          .select('is_initiator')
+          .eq('id', playerId)
+          .single();
+
+        if (playerData) {
+          setIsInitiator(playerData.is_initiator);
+        }
+      }
+
       // Get game to get initials and number of teams
       const { data: game } = await supabase
         .from('games')
@@ -199,7 +214,17 @@ export default function ScorePage() {
               // No answer provided - score 0
               teamAnswer.score = 0;
             } else {
-              const combinedAnswer = teamAnswer.answers.join(' ').toLowerCase().trim();
+              // Normalize answer: trim each word, join with single space, lowercase, normalize whitespace
+              const normalizeAnswer = (answers: string[]) => {
+                return answers
+                  .map(word => word.trim())
+                  .join(' ')
+                  .replace(/\s+/g, ' ')
+                  .toLowerCase()
+                  .trim();
+              };
+
+              const combinedAnswer = normalizeAnswer(teamAnswer.answers);
 
               // Count how many teams answered this row
               const teamsWithAnswers = row.teamAnswers.filter(ta => ta.answers.length === 2);
@@ -208,7 +233,7 @@ export default function ScorePage() {
               const matchingTeams = row.teamAnswers.filter((ta, idx) =>
                 idx !== teamIdx &&
                 ta.answers.length === 2 &&
-                ta.answers.join(' ').toLowerCase().trim() === combinedAnswer
+                normalizeAnswer(ta.answers) === combinedAnswer
               );
 
               if (matchingTeams.length > 0) {
@@ -370,9 +395,9 @@ export default function ScorePage() {
                       <select
                         value={teamAnswer.score}
                         onChange={(e) => handleScoreChange(row.rowNumber, teamIdx, parseInt(e.target.value))}
-                        disabled={teamAnswer.answers.length !== 2}
-                        className={`w-12 md:w-16 px-1 md:px-2 py-1 md:py-2 border border-sky-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-white text-sm md:text-base ${
-                          teamAnswer.answers.length !== 2 ? 'bg-sky-400 text-sky-200' : 'bg-blue-50'
+                        disabled={teamAnswer.answers.length !== 2 || !isInitiator}
+                        className={`w-12 md:w-16 px-1 md:px-2 py-1 md:py-2 border border-sky-300 rounded focus:outline-none focus:ring-2 focus:ring-white text-sm md:text-base ${
+                          teamAnswer.answers.length !== 2 || !isInitiator ? 'bg-sky-100 text-gray-700 cursor-not-allowed' : 'bg-blue-50 text-gray-900'
                         }`}
                       >
                         <option value={0}>0</option>

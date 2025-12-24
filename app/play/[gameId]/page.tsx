@@ -79,8 +79,8 @@ export default function PlayPage() {
           const updatedGame = payload.new as Game;
           setGame(updatedGame);
 
-          // If game moved to scoring, only navigate initiator
-          if (updatedGame.status === 'scoring' && currentPlayer?.is_initiator) {
+          // If game moved to scoring, navigate ALL players
+          if (updatedGame.status === 'scoring') {
             router.push(`/score/${gameId}`);
           }
         }
