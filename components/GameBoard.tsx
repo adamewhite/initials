@@ -506,7 +506,7 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
   return (
     <div className="w-full max-w-4xl mx-auto pb-12">
       {/* Sticky Timer */}
-      <div className={`sticky top-0 z-10 transition-all duration-300 ${
+      <div className={`sticky top-0 z-10 bg-indigo-900 transition-all duration-300 ${
         isScrolled ? 'py-2 shadow-lg' : 'py-6'
       }`}>
         <div className="text-center">
