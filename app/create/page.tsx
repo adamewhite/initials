@@ -200,6 +200,20 @@ export default function InitiatePage() {
     try {
       const gameCode = generateGameCode();
 
+      // Generate random letters if needed BEFORE the loop
+      let firstLetters = randomFirstLetters;
+      let secondLetters = randomSecondLetters;
+
+      if (firstInitialDirection === 'RANDOM' && firstLetters.length === 0) {
+        firstLetters = shuffleLetters();
+        setRandomFirstLetters(firstLetters);
+      }
+
+      if (secondInitialDirection === 'RANDOM' && secondLetters.length === 0) {
+        secondLetters = shuffleLetters();
+        setRandomSecondLetters(secondLetters);
+      }
+
       // Generate all 26 rows of initials, ensuring uniqueness
       const allInitials: string[] = [];
       const usedPairs = new Set<string>();
@@ -238,7 +252,7 @@ export default function InitiatePage() {
               first = String.fromCharCode(65 + Math.floor(Math.random() * 26));
             }
           } else {
-            first = getInitialForRow(i, firstInitialDirection, randomFirstLetters, firstCustomText);
+            first = getInitialForRow(i, firstInitialDirection, firstLetters, firstCustomText);
           }
 
           // Generate second initial
@@ -251,7 +265,7 @@ export default function InitiatePage() {
               second = String.fromCharCode(65 + Math.floor(Math.random() * 26));
             }
           } else {
-            second = getInitialForRow(i, secondInitialDirection, randomSecondLetters, secondCustomText);
+            second = getInitialForRow(i, secondInitialDirection, secondLetters, secondCustomText);
           }
 
           pair = first + second;

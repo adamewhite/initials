@@ -29,6 +29,7 @@ interface Answer {
 export default function GameBoard({ gameId, timerDuration, startedAt, isInitiator, onReset, onScoreGame, initialsRow1, initialsRow2, initialsRow3, allInitials }: GameBoardProps) {
   const [timeRemaining, setTimeRemaining] = useState(timerDuration);
   const [isActive, setIsActive] = useState(true);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   // Initialize 26 rows
   const [answers, setAnswers] = useState<Answer[]>(
@@ -46,6 +47,16 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
   const [teamNumber, setTeamNumber] = useState<number | null>(null);
   const [teamPlayerIds, setTeamPlayerIds] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Scroll detection for compact timer
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 50);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Get current player ID, team number, and all team member IDs
   useEffect(() => {
@@ -238,7 +249,9 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
           filter: `game_id=eq.${gameId}`
         },
         (payload) => {
-          const answer = payload.new as any;
+          // Handle DELETE events differently from INSERT/UPDATE
+          const isDelete = payload.eventType === 'DELETE';
+          const answer = (isDelete ? payload.old : payload.new) as any;
 
           // Only update if this answer is from a team member
           if (teamPlayerIds.includes(answer.player_id)) {
@@ -250,14 +263,14 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
                 if (answer.column_number === 2) {
                   newAnswers[row] = {
                     ...newAnswers[row],
-                    word1: answer.answer_text,
-                    word1Valid: validateWord(answer.answer_text, newAnswers[row].initial1)
+                    word1: isDelete ? '' : answer.answer_text,
+                    word1Valid: isDelete ? true : validateWord(answer.answer_text, newAnswers[row].initial1)
                   };
                 } else if (answer.column_number === 3) {
                   newAnswers[row] = {
                     ...newAnswers[row],
-                    word2: answer.answer_text,
-                    word2Valid: validateWord(answer.answer_text, newAnswers[row].initial2)
+                    word2: isDelete ? '' : answer.answer_text,
+                    word2Valid: isDelete ? true : validateWord(answer.answer_text, newAnswers[row].initial2)
                   };
                 }
               }
@@ -309,7 +322,7 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
   };
 
   const handleInputBlur = async (row: number, column: 1 | 2) => {
-    if (!playerId) return;
+    if (!playerId || teamPlayerIds.length === 0) return;
 
     const answer = answers[row];
     const text = column === 1 ? answer.word1 : answer.word2;
@@ -342,12 +355,12 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
     const columnNumber = column === 1 ? 2 : 3;
 
     if (capitalized.trim() !== '') {
-      // First delete any existing answer, then insert new one
+      // First delete any existing answer from ALL team members for this cell
       await supabase
         .from('answers')
         .delete()
         .eq('game_id', gameId)
-        .eq('player_id', playerId)
+        .in('player_id', teamPlayerIds)
         .eq('row_number', row)
         .eq('column_number', columnNumber);
 
@@ -367,12 +380,12 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
         console.error('Error saving answer:', error);
       }
     } else {
-      // Delete answer if text is empty
+      // Delete answer from ALL team members if text is empty
       const { error } = await supabase
         .from('answers')
         .delete()
         .eq('game_id', gameId)
-        .eq('player_id', playerId)
+        .in('player_id', teamPlayerIds)
         .eq('row_number', row)
         .eq('column_number', columnNumber);
 
@@ -437,13 +450,26 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
 
   return (
     <div className="w-full max-w-4xl mx-auto">
-      {/* Timer */}
-      <div className="mb-6 text-center">
-        <div className={`text-6xl font-bold ${timeRemaining <= 10 ? 'text-red-600 animate-pulse' : 'text-white'}`}>
-          {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+      {/* Sticky Timer */}
+      <div className={`sticky top-0 z-10 bg-gradient-to-br from-indigo-900 to-indigo-950 transition-all duration-300 ${
+        isScrolled ? 'py-2 shadow-lg' : 'py-6'
+      }`}>
+        <div className="text-center">
+          <div className={`font-bold transition-all duration-300 ${
+            isScrolled ? 'text-3xl' : 'text-6xl'
+          } ${
+            timeRemaining <= 30 ? 'text-red-600 animate-pulse' :
+            timeRemaining <= 60 ? 'text-orange-500' :
+            'text-white'
+          }`}>
+            {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+          </div>
+          {!isScrolled && <p className="text-gray-400 mt-2">Time Remaining</p>}
         </div>
-        <p className="text-gray-400 mt-2">Time Remaining</p>
       </div>
+
+      {/* Spacer for when timer is normal size */}
+      <div className={`transition-all duration-300 ${isScrolled ? 'h-0' : 'h-6'}`}></div>
 
       {/* Game Board */}
       <div className="bg-gradient-to-r from-cyan-700 to-cyan-600 rounded-lg shadow-lg p-3 md:p-6">

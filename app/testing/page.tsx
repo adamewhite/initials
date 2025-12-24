@@ -32,6 +32,8 @@ function MockGameBoard() {
   const [secondCustomText, setSecondCustomText] = useState('');
   const [randomFirstLetters, setRandomFirstLetters] = useState<string[]>([]);
   const [randomSecondLetters, setRandomSecondLetters] = useState<string[]>([]);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(90); // Mock timer starting at 90 seconds
 
   // Generate 26 rows with A-Z and Z-A pattern
   const [answers, setAnswers] = useState(
@@ -90,6 +92,28 @@ function MockGameBoard() {
     }
     return 'A';
   };
+
+  // Mock timer countdown for testing colors
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev <= 0) return 90; // Reset to 90 when it hits 0
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Scroll detection for compact timer
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 50);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Regenerate initials when patterns change
   useEffect(() => {
@@ -178,6 +202,27 @@ function MockGameBoard() {
 
   return (
     <div className="w-full max-w-4xl mx-auto">
+      {/* Sticky Timer */}
+      <div className={`sticky top-0 z-10 bg-gradient-to-br from-indigo-900 to-indigo-950 transition-all duration-300 ${
+        isScrolled ? 'py-2 shadow-lg' : 'py-6'
+      }`}>
+        <div className="text-center">
+          <div className={`font-bold transition-all duration-300 ${
+            isScrolled ? 'text-3xl' : 'text-6xl'
+          } ${
+            timeRemaining <= 30 ? 'text-red-600 animate-pulse' :
+            timeRemaining <= 60 ? 'text-orange-500' :
+            'text-white'
+          }`}>
+            {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+          </div>
+          {!isScrolled && <p className="text-gray-400 mt-2">Time Remaining</p>}
+        </div>
+      </div>
+
+      {/* Spacer for when timer is normal size */}
+      <div className={`transition-all duration-300 ${isScrolled ? 'h-0' : 'h-6'}`}></div>
+
       {/* Pattern Selection */}
       <div className="mb-6 bg-gradient-to-r from-cyan-800 to-cyan-700 rounded-lg p-4 space-y-4">
         <div className="grid grid-cols-2 gap-4">
@@ -257,14 +302,6 @@ function MockGameBoard() {
             )}
           </div>
         </div>
-      </div>
-
-      {/* Timer */}
-      <div className="mb-6 text-center">
-        <div className="text-6xl font-bold text-white">
-          1:00
-        </div>
-        <p className="text-gray-400 mt-2">Time Remaining</p>
       </div>
 
       {/* Game Board */}
