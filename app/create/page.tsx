@@ -200,7 +200,7 @@ export default function InitiatePage() {
     setLoading(true);
 
     try {
-      const gameCode = generateGameCode();
+      let gameCode = generateGameCode();
       console.log('[Create] Game code generated:', gameCode);
 
       // Generate random letters if needed BEFORE the loop
@@ -299,30 +299,50 @@ export default function InitiatePage() {
         usedPairs.add(pair);
       }
 
-      // Create the game with initials for each row
-      console.log('[Create] Creating game with:', {
-        code: gameCode,
-        num_teams: numTeams,
-        timer_duration: timerDuration,
-        initials_count: allInitials.length
-      });
+      // Create the game with initials for each row (with retry logic for duplicate codes)
+      let game;
+      let gameError;
+      let retryCount = 0;
+      const maxRetries = 5;
 
-      const { data: game, error: gameError } = await supabase
-        .from('games')
-        .insert({
+      do {
+        console.log('[Create] Creating game with:', {
           code: gameCode,
           num_teams: numTeams,
           timer_duration: timerDuration,
-          status: 'waiting',
-          initials_row1: allInitials[0],
-          initials_row2: allInitials[1],
-          initials_row3: allInitials[2],
-          all_initials: allInitials
-        })
-        .select()
-        .single();
+          initials_count: allInitials.length,
+          attempt: retryCount + 1
+        });
 
-      console.log('[Create] Game created:', game, 'Error:', gameError);
+        const result = await supabase
+          .from('games')
+          .insert({
+            code: gameCode,
+            num_teams: numTeams,
+            timer_duration: timerDuration,
+            status: 'waiting',
+            initials_row1: allInitials[0],
+            initials_row2: allInitials[1],
+            initials_row3: allInitials[2],
+            all_initials: allInitials
+          })
+          .select()
+          .single();
+
+        game = result.data;
+        gameError = result.error;
+
+        console.log('[Create] Game created:', game, 'Error:', gameError);
+
+        // If duplicate key error, generate new code and retry
+        if (gameError && gameError.code === '23505') {
+          gameCode = generateGameCode();
+          console.log('[Create] Duplicate code detected, retrying with new code:', gameCode);
+          retryCount++;
+        } else {
+          break;
+        }
+      } while (retryCount < maxRetries);
 
       if (gameError) throw gameError;
 
