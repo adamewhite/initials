@@ -100,16 +100,15 @@ export default function ScorePage() {
         .select('id, team_number')
         .eq('game_id', gameId);
 
-      // Get all answers ordered by created_at descending to get most recent
+      // Get all answers
       const { data: answers } = await supabase
         .from('answers')
         .select('*')
-        .eq('game_id', gameId)
-        .order('created_at', { ascending: false });
+        .eq('game_id', gameId);
 
       console.log('Game data:', game);
       console.log('Players:', players);
-      console.log('Answers (ordered by created_at desc):', answers);
+      console.log('Answers:', answers);
 
       if (game && players) {
         const numTeams = game.num_teams || 2; // Default to 2 teams if not set
@@ -173,8 +172,7 @@ export default function ScorePage() {
           for (let teamNum = 1; teamNum <= numTeams; teamNum++) {
             const teamPlayerIds = teamPlayerMap[teamNum] || [];
 
-            // Get the most recent answer for each column from any team member
-            // Since answers are ordered by created_at desc, .find() gets the most recent
+            // Get answer for each column from any team member
             const column2Answer = answers?.find(
               a => teamPlayerIds.includes(a.player_id) &&
                    a.row_number === row.rowNumber &&
