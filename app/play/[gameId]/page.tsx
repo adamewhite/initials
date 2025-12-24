@@ -123,7 +123,14 @@ export default function PlayPage() {
     );
   }
 
-  const handleScoreGame = () => {
+  const handleScoreGame = async () => {
+    // Update game status to scoring - this will trigger all players to redirect
+    await supabase
+      .from('games')
+      .update({ status: 'scoring' })
+      .eq('id', gameId);
+
+    // Navigate initiator immediately (subscription will handle others)
     router.push(`/score/${gameId}`);
   };
 
