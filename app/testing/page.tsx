@@ -203,7 +203,7 @@ function MockGameBoard() {
   return (
     <div className="w-full max-w-4xl mx-auto">
       {/* Sticky Timer */}
-      <div className={`sticky top-0 z-10 bg-gradient-to-br from-indigo-900 to-indigo-950 transition-all duration-300 ${
+      <div className={`sticky top-0 z-10 bg-indigo-900 transition-all duration-300 ${
         isScrolled ? 'py-2 shadow-lg' : 'py-6'
       }`}>
         <div className="text-center">
