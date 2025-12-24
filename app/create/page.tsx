@@ -194,11 +194,14 @@ export default function InitiatePage() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
+    console.log('[Create] handleSubmit called');
     e.preventDefault();
+    console.log('[Create] preventDefault called');
     setLoading(true);
 
     try {
       const gameCode = generateGameCode();
+      console.log('[Create] Game code generated:', gameCode);
 
       // Generate random letters if needed BEFORE the loop
       let firstLetters = randomFirstLetters;
@@ -297,6 +300,13 @@ export default function InitiatePage() {
       }
 
       // Create the game with initials for each row
+      console.log('[Create] Creating game with:', {
+        code: gameCode,
+        num_teams: numTeams,
+        timer_duration: timerDuration,
+        initials_count: allInitials.length
+      });
+
       const { data: game, error: gameError } = await supabase
         .from('games')
         .insert({
@@ -311,6 +321,8 @@ export default function InitiatePage() {
         })
         .select()
         .single();
+
+      console.log('[Create] Game created:', game, 'Error:', gameError);
 
       if (gameError) throw gameError;
 
@@ -340,9 +352,10 @@ export default function InitiatePage() {
       }
 
       // Navigate to waiting room
+      console.log('[Create] Navigating to waiting room:', `/waiting/${game.id}`);
       router.push(`/waiting/${game.id}`);
     } catch (error: any) {
-      console.error('Error creating game:', error);
+      console.error('[Create] Error creating game:', error);
       alert(`Failed to create game: ${error.message || 'Please try again.'}`);
       setLoading(false);
     }
