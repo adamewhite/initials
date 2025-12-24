@@ -109,6 +109,7 @@ export default function ScorePage() {
       console.log('Game data:', game);
       console.log('Players:', players);
       console.log('Answers:', answers);
+      console.log('Unique player IDs in answers:', [...new Set(answers?.map(a => a.player_id) || [])]);
 
       if (game && players) {
         const numTeams = game.num_teams || 2; // Default to 2 teams if not set
@@ -189,9 +190,10 @@ export default function ScorePage() {
             if (column2Answer) teamRowAnswers.push(column2Answer.answer_text);
             if (column3Answer) teamRowAnswers.push(column3Answer.answer_text);
 
-            if (row.rowNumber === 0 && teamNum === 1) {
-              console.log('Debug row 0, team 1:');
+            if (row.rowNumber === 0) {
+              console.log(`Debug row 0, team ${teamNum}:`);
               console.log('  Team player IDs:', teamPlayerIds);
+              console.log('  All row 0 answers:', answers?.filter(a => a.row_number === 0));
               console.log('  All matching column 2 answers:', answers?.filter(
                 a => teamPlayerIds.includes(a.player_id) && a.row_number === 0 && a.column_number === 2
               ));
