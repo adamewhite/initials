@@ -449,7 +449,7 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
+    <div className="w-full max-w-4xl mx-auto pb-12">
       {/* Sticky Timer */}
       <div className={`sticky top-0 z-10 bg-gradient-to-br from-indigo-900 to-indigo-950 transition-all duration-300 ${
         isScrolled ? 'py-2 shadow-lg' : 'py-6'
