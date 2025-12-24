@@ -30,10 +30,13 @@ export default function JoinPage() {
     if (!gameCode.trim()) return;
 
     try {
+      // Strip spaces from game code for lookup
+      const normalizedCode = gameCode.replace(/\s+/g, '');
+
       const { data: game, error } = await supabase
         .from('games')
         .select('num_teams')
-        .ilike('code', gameCode)
+        .ilike('code', normalizedCode)
         .single();
 
       if (game) {
@@ -50,11 +53,14 @@ export default function JoinPage() {
     setLoading(true);
 
     try {
+      // Strip spaces from game code for lookup (case-insensitive)
+      const normalizedCode = gameCode.replace(/\s+/g, '');
+
       // Find the game by code (case-insensitive)
       const { data: game, error: gameError } = await supabase
         .from('games')
         .select('*')
-        .ilike('code', gameCode)
+        .ilike('code', normalizedCode)
         .single();
 
       if (gameError || !game) {
