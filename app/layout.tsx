@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     url: 'https://www.gewgull.com',
     images: [
       {
-        url: '/og_image.png',
+        url: '/og_image.jpg',
         width: 1200,
         height: 630,
         alt: 'INITIALS - A game not for the faint of heart',
@@ -35,7 +35,16 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'INITIALS',
     description: 'A game not for the faint of heart.',
-    images: ['/og_image.png'],
+    images: ['/og_image.jpg'],
+  },
+  appleWebApp: {
+    capable: true,
+    title: 'INITIALS',
+    statusBarStyle: 'black-translucent',
+  },
+  other: {
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'black-translucent',
   },
 };
 
