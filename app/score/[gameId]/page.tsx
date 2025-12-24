@@ -116,7 +116,7 @@ export default function ScorePage() {
       console.log('Players:', players);
       console.log('Answers:', answers);
       console.log('Score overrides:', scoreOverrides);
-      console.log('Unique player IDs in answers:', [...new Set(answers?.map(a => a.player_id) || [])]);
+      console.log('Unique player IDs in answers:', Array.from(new Set(answers?.map(a => a.player_id) || [])));
 
       if (game && players) {
         const numTeams = game.num_teams || 2; // Default to 2 teams if not set
