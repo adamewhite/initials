@@ -14,12 +14,14 @@ const archivo = Archivo({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://www.gewgull.com'),
   title: 'INITIALS',
   description: 'A game not for the faint of heart.',
   openGraph: {
     title: 'INITIALS',
     description: 'A game not for the faint of heart.',
     type: 'website',
+    url: 'https://www.gewgull.com',
     images: [
       {
         url: '/og_image.png',
