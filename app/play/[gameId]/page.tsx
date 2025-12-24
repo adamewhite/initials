@@ -76,16 +76,20 @@ export default function PlayPage() {
           filter: `id=eq.${gameId}`
         },
         (payload) => {
+          console.log('Game status update received:', payload);
           const updatedGame = payload.new as Game;
           setGame(updatedGame);
 
           // If game moved to scoring, navigate ALL players
           if (updatedGame.status === 'scoring') {
+            console.log('Navigating to scoring page');
             router.push(`/score/${gameId}`);
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Game subscription status:', status);
+      });
 
     return () => {
       gameSubscription.unsubscribe();
