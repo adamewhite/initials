@@ -106,9 +106,16 @@ export default function ScorePage() {
         .select('*')
         .eq('game_id', gameId);
 
+      // Get score overrides
+      const { data: scoreOverrides } = await supabase
+        .from('score_overrides')
+        .select('*')
+        .eq('game_id', gameId);
+
       console.log('Game data:', game);
       console.log('Players:', players);
       console.log('Answers:', answers);
+      console.log('Score overrides:', scoreOverrides);
       console.log('Unique player IDs in answers:', [...new Set(answers?.map(a => a.player_id) || [])]);
 
       if (game && players) {
@@ -253,6 +260,14 @@ export default function ScorePage() {
                 teamAnswer.score = 3;
               }
             }
+
+            // Apply score override if one exists
+            const override = scoreOverrides?.find(
+              so => so.row_number === row.rowNumber && so.team_number === teamAnswer.teamNumber
+            );
+            if (override) {
+              teamAnswer.score = override.score;
+            }
           });
         });
 
@@ -287,17 +302,67 @@ export default function ScorePage() {
         console.log('Scoring answers subscription status:', status);
       });
 
+    // Subscribe to real-time score override changes
+    const overridesSubscription = supabase
+      .channel(`scoring-overrides-${gameId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'score_overrides',
+          filter: `game_id=eq.${gameId}`
+        },
+        (payload) => {
+          const timestamp = new Date().toISOString();
+          console.log(`[${timestamp}] Score override change received:`, payload.eventType, payload);
+          // Refetch all answers to recalculate scores
+          console.log(`[${timestamp}] Refetching answers...`);
+          fetchAnswers();
+        }
+      )
+      .subscribe((status) => {
+        console.log('Scoring overrides subscription status:', status);
+      });
+
     return () => {
       answersSubscription.unsubscribe();
+      overridesSubscription.unsubscribe();
     };
   }, [gameId]);
 
-  const handleScoreChange = (rowIndex: number, teamIndex: number, score: number) => {
+  const handleScoreChange = async (rowIndex: number, teamIndex: number, score: number) => {
+    // Update local state immediately for responsive UI
     setRowAnswers(prev => {
       const updated = [...prev];
       updated[rowIndex].teamAnswers[teamIndex].score = score;
       return updated;
     });
+
+    // Save to database
+    const teamNumber = rowAnswers[rowIndex].teamAnswers[teamIndex].teamNumber;
+
+    try {
+      const { error } = await supabase
+        .from('score_overrides')
+        .upsert({
+          game_id: gameId,
+          row_number: rowIndex,
+          team_number: teamNumber,
+          score: score,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'game_id,row_number,team_number'
+        });
+
+      if (error) {
+        console.error('Error saving score override:', error);
+      } else {
+        console.log(`Score override saved: row ${rowIndex}, team ${teamNumber}, score ${score}`);
+      }
+    } catch (error) {
+      console.error('Error saving score override:', error);
+    }
   };
 
   const handleValidate = async (rowIndex: number, teamIndex: number) => {
@@ -335,9 +400,38 @@ export default function ScorePage() {
         setRowAnswers(prev => {
           const updated = [...prev];
           updated[rowIndex].teamAnswers[teamIndex].validation = { status: 'invalid' };
-          updated[rowIndex].teamAnswers[teamIndex].score = 0; // Set score to 0
+          // Only allow initiators to change the score
+          if (isInitiator) {
+            updated[rowIndex].teamAnswers[teamIndex].score = 0;
+          }
           return updated;
         });
+
+        // Save score override to database if initiator
+        if (isInitiator) {
+          const teamNumber = rowAnswers[rowIndex].teamAnswers[teamIndex].teamNumber;
+          try {
+            const { error } = await supabase
+              .from('score_overrides')
+              .upsert({
+                game_id: gameId,
+                row_number: rowIndex,
+                team_number: teamNumber,
+                score: 0,
+                updated_at: new Date().toISOString()
+              }, {
+                onConflict: 'game_id,row_number,team_number'
+              });
+
+            if (error) {
+              console.error('Error saving score override (validation):', error);
+            } else {
+              console.log(`Score override saved (validation): row ${rowIndex}, team ${teamNumber}, score 0`);
+            }
+          } catch (dbError) {
+            console.error('Error saving score override (validation):', dbError);
+          }
+        }
       }
     } catch (error) {
       console.error('Error validating answer:', error);
@@ -345,9 +439,38 @@ export default function ScorePage() {
       setRowAnswers(prev => {
         const updated = [...prev];
         updated[rowIndex].teamAnswers[teamIndex].validation = { status: 'invalid' };
-        updated[rowIndex].teamAnswers[teamIndex].score = 0;
+        // Only allow initiators to change the score
+        if (isInitiator) {
+          updated[rowIndex].teamAnswers[teamIndex].score = 0;
+        }
         return updated;
       });
+
+      // Save score override to database if initiator
+      if (isInitiator) {
+        const teamNumber = rowAnswers[rowIndex].teamAnswers[teamIndex].teamNumber;
+        try {
+          const { error: dbError } = await supabase
+            .from('score_overrides')
+            .upsert({
+              game_id: gameId,
+              row_number: rowIndex,
+              team_number: teamNumber,
+              score: 0,
+              updated_at: new Date().toISOString()
+            }, {
+              onConflict: 'game_id,row_number,team_number'
+            });
+
+          if (dbError) {
+            console.error('Error saving score override (validation error):', dbError);
+          } else {
+            console.log(`Score override saved (validation error): row ${rowIndex}, team ${teamNumber}, score 0`);
+          }
+        } catch (saveError) {
+          console.error('Error saving score override (validation error):', saveError);
+        }
+      }
     }
   };
 
@@ -430,7 +553,7 @@ export default function ScorePage() {
                         onChange={(e) => handleScoreChange(row.rowNumber, teamIdx, parseInt(e.target.value))}
                         disabled={teamAnswer.answers.length !== 2 || !isInitiator}
                         className={`w-12 md:w-16 px-1 md:px-2 py-1 md:py-2 border border-sky-300 rounded focus:outline-none focus:ring-2 focus:ring-white text-sm md:text-base ${
-                          teamAnswer.answers.length !== 2 || !isInitiator ? 'bg-sky-100 text-gray-700 cursor-not-allowed' : 'bg-blue-50 text-gray-900'
+                          teamAnswer.answers.length !== 2 || !isInitiator ? 'bg-cyan-200 text-gray-700 cursor-not-allowed' : 'bg-blue-50 text-gray-900'
                         }`}
                       >
                         <option value={0}>0</option>
