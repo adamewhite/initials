@@ -174,34 +174,32 @@ export default function ScorePage() {
             const teamPlayerIds = teamPlayerMap[teamNum] || [];
 
             // Get answer for each column from any team member
-            const column2Answer = answers?.find(
+            // Use the LAST matching answer (most recent) instead of first
+            const column2Matches = answers?.filter(
               a => teamPlayerIds.includes(a.player_id) &&
                    a.row_number === row.rowNumber &&
                    a.column_number === 2
             );
+            const column2Answer = column2Matches?.[column2Matches.length - 1];
 
-            const column3Answer = answers?.find(
+            const column3Matches = answers?.filter(
               a => teamPlayerIds.includes(a.player_id) &&
                    a.row_number === row.rowNumber &&
                    a.column_number === 3
             );
+            const column3Answer = column3Matches?.[column3Matches.length - 1];
 
             const teamRowAnswers = [];
             if (column2Answer) teamRowAnswers.push(column2Answer.answer_text);
             if (column3Answer) teamRowAnswers.push(column3Answer.answer_text);
 
-            if (row.rowNumber === 0) {
-              console.log(`Debug row 0, team ${teamNum}:`);
+            if (row.rowNumber === 1) {
+              console.log(`Debug row 1 (BY), team ${teamNum}:`);
               console.log('  Team player IDs:', teamPlayerIds);
-              console.log('  All row 0 answers:', answers?.filter(a => a.row_number === 0));
-              console.log('  All matching column 2 answers:', answers?.filter(
-                a => teamPlayerIds.includes(a.player_id) && a.row_number === 0 && a.column_number === 2
-              ));
-              console.log('  Column 2 answer (most recent):', column2Answer);
-              console.log('  All matching column 3 answers:', answers?.filter(
-                a => teamPlayerIds.includes(a.player_id) && a.row_number === 0 && a.column_number === 3
-              ));
-              console.log('  Column 3 answer (most recent):', column3Answer);
+              console.log('  Column 2 matches:', column2Matches);
+              console.log('  Column 2 answer (LAST):', column2Answer);
+              console.log('  Column 3 matches:', column3Matches);
+              console.log('  Column 3 answer (LAST):', column3Answer);
               console.log('  Final answers:', teamRowAnswers);
             }
 
