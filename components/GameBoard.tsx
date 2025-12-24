@@ -356,16 +356,39 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
 
     if (capitalized.trim() !== '') {
       // First delete any existing answer from ALL team members for this cell
-      await supabase
+      console.log('[GameBoard] Deleting existing answers before insert:', {
+        gameId,
+        teamPlayerIds,
+        row,
+        columnNumber,
+        newAnswer: capitalized
+      });
+
+      const { data: deletedData, error: deleteError } = await supabase
         .from('answers')
         .delete()
         .eq('game_id', gameId)
         .in('player_id', teamPlayerIds)
         .eq('row_number', row)
-        .eq('column_number', columnNumber);
+        .eq('column_number', columnNumber)
+        .select();
+
+      console.log('[GameBoard] Delete result:', {
+        deleted: deletedData,
+        error: deleteError
+      });
 
       // Insert new answer
-      const { error } = await supabase
+      console.log('[GameBoard] Inserting new answer:', {
+        gameId,
+        playerId,
+        initials,
+        answer_text: capitalized,
+        column_number: columnNumber,
+        row_number: row
+      });
+
+      const { data: insertData, error: insertError } = await supabase
         .from('answers')
         .insert({
           game_id: gameId,
@@ -374,23 +397,42 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
           answer_text: capitalized,
           column_number: columnNumber,
           row_number: row
-        });
+        })
+        .select();
 
-      if (error) {
-        console.error('Error saving answer:', error);
+      console.log('[GameBoard] Insert result:', {
+        inserted: insertData,
+        error: insertError
+      });
+
+      if (insertError) {
+        console.error('[GameBoard] Error saving answer:', insertError);
       }
     } else {
       // Delete answer from ALL team members if text is empty
-      const { error } = await supabase
+      console.log('[GameBoard] Deleting answer (empty input):', {
+        gameId,
+        teamPlayerIds,
+        row,
+        columnNumber
+      });
+
+      const { data: deletedData, error: deleteError } = await supabase
         .from('answers')
         .delete()
         .eq('game_id', gameId)
         .in('player_id', teamPlayerIds)
         .eq('row_number', row)
-        .eq('column_number', columnNumber);
+        .eq('column_number', columnNumber)
+        .select();
 
-      if (error && error.code !== 'PGRST116') { // Ignore "not found" errors
-        console.error('Error deleting answer:', error);
+      console.log('[GameBoard] Delete result:', {
+        deleted: deletedData,
+        error: deleteError
+      });
+
+      if (deleteError && deleteError.code !== 'PGRST116') { // Ignore "not found" errors
+        console.error('[GameBoard] Error deleting answer:', deleteError);
       }
     }
   };
@@ -451,7 +493,7 @@ export default function GameBoard({ gameId, timerDuration, startedAt, isInitiato
   return (
     <div className="w-full max-w-4xl mx-auto pb-12">
       {/* Sticky Timer */}
-      <div className={`sticky top-0 z-10 bg-indigo-900 transition-all duration-300 ${
+      <div className={`sticky top-0 z-10 transition-all duration-300 ${
         isScrolled ? 'py-2 shadow-lg' : 'py-6'
       }`}>
         <div className="text-center">
