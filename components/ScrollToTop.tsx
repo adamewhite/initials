@@ -14,27 +14,27 @@ export default function ScrollToTop() {
   }, []);
 
   useEffect(() => {
-    // Aggressive scroll to top on route change
-    // Use multiple methods to ensure it works
-    window.scrollTo(0, 0);
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
+    // Force scroll to top immediately
+    const scrollToTop = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+
+    // Execute immediately
+    scrollToTop();
 
     // Also try after a frame render
-    requestAnimationFrame(() => {
-      window.scrollTo(0, 0);
-      document.documentElement.scrollTop = 0;
-      document.body.scrollTop = 0;
-    });
+    requestAnimationFrame(scrollToTop);
 
-    // And again with a small delay to catch late renders
-    const timeout = setTimeout(() => {
-      window.scrollTo(0, 0);
-      document.documentElement.scrollTop = 0;
-      document.body.scrollTop = 0;
-    }, 100);
+    // Try multiple times with increasing delays to catch all render phases
+    const timeouts = [0, 10, 50, 100, 200].map(delay =>
+      setTimeout(scrollToTop, delay)
+    );
 
-    return () => clearTimeout(timeout);
+    return () => {
+      timeouts.forEach(timeout => clearTimeout(timeout));
+    };
   }, [pathname]);
 
   return null;
